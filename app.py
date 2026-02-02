@@ -785,7 +785,7 @@ def olympiad_create():
 
 @app.route('/olympiad/mode/<olympiad_id>')
 def get_olympiad_mode(olympiad_id):
-    """API: Возвращает режим olympiads (free/closed) для UI."""
+    """API: Возвращает режим олимпиады (free/closed) для UI."""
 
     with olympiad_lock:
         if olympiad_id not in olympiads:
@@ -804,7 +804,7 @@ def olympiad_join():
         organization = request.form.get('organization', '').strip() 
 
         if not nickname or not olympiad_id:
-            flash('Нужно ввести и никнейм, и ID olympiads.', 'warning')
+            flash('Нужно ввести и никнейм, и ID олимпиады.', 'warning')
             return redirect(url_for('olympiad_join'))
         
         oly_data_copy = None 
@@ -865,7 +865,7 @@ def olympiad_join():
             participant_data = db.validate_closed_participant(olympiad_id, nickname, password)
             
             if not participant_data:
-                flash('Неверный никнейм или пароль для этой olympiads.', 'danger')
+                flash('Неверный никнейм или пароль для этой олимпиады.', 'danger')
                 return redirect(url_for('olympiad_join'))
                 
             participant_db_id = str(participant_data['id']) 
@@ -1572,7 +1572,7 @@ def admin_archive():
 @app.route('/admin/archive/view/<olympiad_id>')
 @admin_required
 def admin_archive_view(olympiad_id):
-    """Детальный просмотр результатов olympiads с кодом."""
+    """Детальный просмотр результатов олимпиады с кодом."""
     data = db.get_olympiad_results(olympiad_id)
     if not data:
         flash('Олимпиада не найдена или данных нет.', 'warning')
@@ -1587,7 +1587,7 @@ def admin_archive_view(olympiad_id):
 @app.route('/admin/archive/delete/<olympiad_id>', methods=['POST'])
 @admin_required
 def admin_archive_delete(olympiad_id):
-    """Удаление olympiads из базы."""
+    """Удаление олимпиады из базы."""
     if db.delete_olympiad_history(olympiad_id):
         flash(f'Олимпиада {olympiad_id} успешно удалена.', 'success')
     else:
@@ -1779,7 +1779,7 @@ def olympiad_print_cards(olympiad_id):
         flash('В этой олимпиаде нет зарегистрированных участников (whitelist).', 'warning')
         return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
     
-    # Получаем название olympiads
+    # Получаем название олимпиады
     oly_name = olympiad_id
     with olympiad_lock:
         if olympiad_id in olympiads:

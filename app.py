@@ -821,7 +821,7 @@ def olympiad_create():
             }
 
             try:
-                db.save_olympiad_config(olympiad_id, tasks_ordered, name=name, duration=duration, scoring=scoring, allowed_languages=allowed_languages, freeze_minutes=freeze_minutes if freeze_minutes > 0 else None)
+                db.save_olympiad_config(olympiad_id, tasks_ordered, name=name, duration=duration, scoring=scoring, allowed_languages=allowed_languages, freeze_minutes=freeze_minutes or None)
                 
                 if status == 'scheduled':
                     db.add_scheduled_olympiad(olympiad_id, name, start_timestamp, config_dict, tasks_ordered)

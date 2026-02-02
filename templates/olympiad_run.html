@@ -84,9 +84,17 @@
                         <div class="d-flex justify-content-between align-items-center mb-2 bg-light p-2 rounded">
                             <label class="form-label mb-0 fw-bold small text-uppercase text-muted">Редактор кода</label>
                             <select id="language-{{ task[0] }}" name="language" class="form-select form-select-sm w-auto border-0 bg-transparent fw-bold text-primary" style="cursor: pointer;">
-                                <option value="Python" selected>Python 3.11</option>
-                                <option value="C++">C++ 17 (G++)</option>
-                                <option value="C#">C# Mono</option>
+                                {% set allowed_langs = oly_session.config.allowed_languages or ['Python', 'C++', 'C#'] %}
+                                {% set ns = namespace(first_selected=false) %}
+                                {% if 'Python' in allowed_langs %}
+                                <option value="Python" {% if not ns.first_selected %}selected{% set ns.first_selected = true %}{% endif %}>Python 3.11</option>
+                                {% endif %}
+                                {% if 'C++' in allowed_langs %}
+                                <option value="C++" {% if not ns.first_selected %}selected{% set ns.first_selected = true %}{% endif %}>C++ 17 (G++)</option>
+                                {% endif %}
+                                {% if 'C#' in allowed_langs %}
+                                <option value="C#" {% if not ns.first_selected %}selected{% set ns.first_selected = true %}{% endif %}>C# Mono</option>
+                                {% endif %}
                             </select>
                         </div>
                         
@@ -398,15 +406,22 @@
             const textArea = document.getElementById(`code-${taskId}`);
             const alertBox = document.getElementById(`alert-box-${taskId}`);
             const submitBtn = document.getElementById(`submit-btn-${taskId}`);
+            const langSelect = document.getElementById(`language-${taskId}`);
+            
+            // Determine initial mode based on selected language
+            const selectedLang = langSelect.value;
+            let initialMode = 'python';
+            if (selectedLang === 'C++') initialMode = 'text/x-c++src';
+            else if (selectedLang === 'C#') initialMode = 'text/x-csharp';
             
             const editor = CodeMirror.fromTextArea(textArea, {
-                lineNumbers: true, mode: 'python', theme: 'material-darker', matchBrackets: true, indentUnit: 4
+                lineNumbers: true, mode: initialMode, theme: 'material-darker', matchBrackets: true, indentUnit: 4
             });
             editor.setSize("100%", "100%");
             setTimeout(() => editor.refresh(), 100);
             editors[taskId] = editor;
 
-            document.getElementById(`language-${taskId}`).addEventListener('change', (e) => {
+            langSelect.addEventListener('change', (e) => {
                 const lang = e.target.value;
                 if (lang === 'C++') {
                     editor.setOption('mode', 'text/x-c++src');

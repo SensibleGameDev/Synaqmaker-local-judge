@@ -66,6 +66,12 @@
         <span class="badge bg-success">Свободный</span>
         {% endif %}
     </p>
+    <p class="lead">Разрешённые языки: 
+        {% set allowed_langs = olympiad_data.config.allowed_languages or ['Python', 'C++', 'C#'] %}
+        {% for lang in allowed_langs %}
+        <span class="badge bg-primary">{{ lang }}</span>
+        {% endfor %}
+    </p>
     <h4 id="timer-block" class="d-none mt-3">Оставшееся время: <span id="timer" class="badge bg-secondary">00:00:00</span></h4>
     <hr class="my-4">
 

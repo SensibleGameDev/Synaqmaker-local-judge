@@ -674,6 +674,11 @@ def olympiad_submit(olympiad_id):
 
         p_data = oly['participants'][participant_id]
         
+        # Validate language against allowed languages
+        allowed_languages = oly['config'].get('allowed_languages', ['Python', 'C++', 'C#'])
+        if language not in allowed_languages:
+            return jsonify({'error': f'Язык "{language}" не разрешён для этой олимпиады.'}), 400
+        
         if p_data.get('disqualified'): 
             return jsonify({'error': 'Вы дисквалифицированы.'}), 400
         if p_data.get('finished_early'): 
@@ -727,6 +732,11 @@ def olympiad_create():
         mode = request.form.get('mode')
         name = request.form.get('name', 'Olympiad')
         start_time_str = request.form.get('start_time_local')
+        allowed_languages = request.form.getlist('allowed_languages')
+        
+        # Default to all languages if none selected
+        if not allowed_languages:
+            allowed_languages = ['Python', 'C++', 'C#']
 
         if not (1 <= len(task_ids) <= 10):
             flash('Необходимо выбрать от 1 до 10 задач.', 'danger') 
@@ -753,7 +763,8 @@ def olympiad_create():
             config_dict = {
                 'duration_minutes': duration,
                 'scoring': scoring,
-                'mode': mode 
+                'mode': mode,
+                'allowed_languages': allowed_languages
             }
 
             olympiads[olympiad_id] = {
@@ -770,7 +781,7 @@ def olympiad_create():
             }
 
             try:
-                db.save_olympiad_config(olympiad_id, tasks_ordered, name=name, duration=duration, scoring=scoring)
+                db.save_olympiad_config(olympiad_id, tasks_ordered, name=name, duration=duration, scoring=scoring, allowed_languages=allowed_languages)
                 
                 if status == 'scheduled':
                     db.add_scheduled_olympiad(olympiad_id, name, start_timestamp, config_dict, tasks_ordered)
@@ -1083,7 +1094,8 @@ def olympiad_end(olympiad_id):
         
 
         if scoring_mode == 'icpc':
-            participants_list.sort(key=lambda p: (p['total_score'], -p['total_penalty']), reverse=True)
+            # ICPC: Sort by problems solved (descending), then by penalty (ascending)
+            participants_list.sort(key=lambda p: (-p['total_score'], p['total_penalty']))
         else:
             participants_list.sort(key=lambda p: p['total_score'], reverse=True)
         tasks_details = results['tasks_details']
@@ -1724,6 +1736,10 @@ def restore_state_on_startup():
                 
                 config = json.loads(row['config_json'])
                 task_ids = json.loads(row['task_ids_json'])
+                
+                # Ensure allowed_languages has a default value for backward compatibility
+                if 'allowed_languages' not in config:
+                    config['allowed_languages'] = ['Python', 'C++', 'C#']
                 
                 olympiads[oid] = {
                     'status': 'scheduled', # Новый статус

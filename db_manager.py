@@ -131,6 +131,7 @@ class DBManager:
                 if "duration_minutes" not in cols: c.execute("ALTER TABLE olympiad_configs ADD COLUMN duration_minutes INTEGER DEFAULT 300")
                 if "scoring_type" not in cols: c.execute("ALTER TABLE olympiad_configs ADD COLUMN scoring_type TEXT DEFAULT 'icpc'")
                 if "start_time" not in cols: c.execute("ALTER TABLE olympiad_configs ADD COLUMN start_time REAL")
+                if "allowed_languages" not in cols: c.execute("ALTER TABLE olympiad_configs ADD COLUMN allowed_languages TEXT")
 
                 c.execute('''CREATE TABLE IF NOT EXISTS olympiad_submissions (
                                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -170,8 +171,9 @@ class DBManager:
                             )''')
                 conn.commit()
 
-    def save_olympiad_config(self, olympiad_id, task_ids_list, name=None, duration=None, scoring=None):
+    def save_olympiad_config(self, olympiad_id, task_ids_list, name=None, duration=None, scoring=None, allowed_languages=None):
         ids_json = json.dumps(task_ids_list)
+        languages_json = json.dumps(allowed_languages) if allowed_languages else None
         with self.write_lock:
             with self._get_conn() as conn:
                 c = conn.cursor()
@@ -190,14 +192,17 @@ class DBManager:
                     if scoring:
                         query += ", scoring_type=?"
                         params.append(scoring)
+                    if languages_json:
+                        query += ", allowed_languages=?"
+                        params.append(languages_json)
                     query += " WHERE olympiad_id=?"
                     params.append(olympiad_id)
                     c.execute(query, tuple(params))
                 else:
                     c.execute("""
-                        INSERT INTO olympiad_configs (olympiad_id, task_ids_json, name, duration_minutes, scoring_type)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (olympiad_id, ids_json, name, duration or 300, scoring or 'icpc'))
+                        INSERT INTO olympiad_configs (olympiad_id, task_ids_json, name, duration_minutes, scoring_type, allowed_languages)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (olympiad_id, ids_json, name, duration or 300, scoring or 'icpc', languages_json))
                 conn.commit()
     
     def set_olympiad_start_time(self, olympiad_id, start_time):
@@ -605,6 +610,14 @@ class DBManager:
                     'pending_submissions': 0
                 }
 
+            # Parse allowed_languages from DB (if exists)
+            allowed_languages_raw = None
+            try:
+                allowed_languages_raw = row['allowed_languages']
+            except (KeyError, IndexError):
+                pass
+            allowed_languages = json.loads(allowed_languages_raw) if allowed_languages_raw else ['Python', 'C++', 'C#']
+
             restored[oid] = {
                 'status': status,
                 'task_ids': json.loads(row['task_ids_json']),
@@ -612,7 +625,8 @@ class DBManager:
                 'config': {
                     'duration_minutes': row['duration_minutes'] or 300, 
                     'scoring': row['scoring_type'] or 'icpc',           
-                    'mode': 'free'
+                    'mode': 'free',
+                    'allowed_languages': allowed_languages
                 },
                 'start_time': start_time,
                 'participants': parts,

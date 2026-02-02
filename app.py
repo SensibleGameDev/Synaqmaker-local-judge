@@ -95,6 +95,7 @@ def _get_olympiad_state(olympiad_id):
     ОПТИМИЗИРОВАННАЯ ВЕРСИЯ: Использует кэш.
     Пересчитывает scoreboard только если is_dirty=True.
     [FIX] Добавлена нормализация ключей scores (str), чтобы избежать ошибки JSON sort.
+    [FREEZE] Добавлена поддержка заморозки таблицы в стиле ICPC.
     """
     with olympiad_lock:
         if olympiad_id not in olympiads:
@@ -105,10 +106,26 @@ def _get_olympiad_state(olympiad_id):
             oly['first_solves'] = db.get_first_solvers(olympiad_id)
 
         remaining_seconds = 0
+        is_frozen = False
+        freeze_minutes = oly['config'].get('freeze_minutes', 0)
+        
         if oly['status'] == 'running' and oly.get('start_time'):
             elapsed = time.time() - oly['start_time']
             duration_sec = oly['config']['duration_minutes'] * 60
             remaining_seconds = max(0, duration_sec - elapsed)
+            
+            # Check if freeze should be triggered
+            if freeze_minutes > 0:
+                freeze_threshold_seconds = freeze_minutes * 60
+                if remaining_seconds <= freeze_threshold_seconds:
+                    is_frozen = True
+                    # Save frozen scoreboard snapshot once when freeze is first triggered
+                    if not oly.get('freeze_triggered', False):
+                        oly['freeze_triggered'] = True
+                        # Compute and save the frozen scoreboard
+                        frozen_board = _compute_scoreboard(oly)
+                        oly['frozen_scoreboard'] = frozen_board
+            
             if remaining_seconds <= 0:
                 oly['status'] = 'finished'
 
@@ -118,6 +135,11 @@ def _get_olympiad_state(olympiad_id):
             response['remaining_seconds'] = remaining_seconds
             response['status'] = oly['status'] 
             response['first_solves'] = oly['first_solves']
+            response['is_frozen'] = is_frozen
+            response['freeze_minutes'] = freeze_minutes
+            # If frozen, return frozen scoreboard instead of live one
+            if is_frozen and oly.get('frozen_scoreboard'):
+                response['scoreboard'] = oly['frozen_scoreboard']
             return response
 
         oly_data_copy = {
@@ -126,44 +148,7 @@ def _get_olympiad_state(olympiad_id):
             'participants': oly['participants'], 
         }
 
-        scoreboard = []
-        scoring_mode = oly_data_copy['config'].get('scoring', 'all_or_nothing')
-
-        for p_id, p_data in oly_data_copy['participants'].items(): 
-            total_score = 0
-            total_penalty = 0
-            
-            # [FIX] Нормализация ключей: превращаем все ID задач в строки
-            # Это предотвращает ошибку TypeError при jsonify (смесь int и str)
-            normalized_scores = {}
-            for k, v in p_data['scores'].items():
-                str_key = str(k)
-                # [FIX] Гарантируем, что все ключи в v тоже нормализованы
-                if isinstance(v, dict):
-                    normalized_scores[str_key] = v
-                else:
-                    normalized_scores[str_key] = {'score': 0, 'attempts': 0, 'passed': False, 'penalty': 0}
-
-            if scoring_mode == 'icpc':
-                total_score = sum(s.get('score', 0) for s in normalized_scores.values())
-                total_penalty = sum(s.get('penalty', 0) for s in normalized_scores.values() if s.get('passed'))
-            else:
-                total_score = sum(s.get('score', 0) for s in normalized_scores.values())
-            
-            scoreboard.append({
-                'participant_id': p_id, 
-                'nickname': p_data['nickname'],
-                'organization': p_data.get('organization', None),
-                'scores': normalized_scores,
-                'total_score': total_score,
-                'total_penalty': total_penalty 
-            })
-
-        # [FIX] ИСПРАВЛЕНА СОРТИРОВКА ДЛЯ ICPC (по решенным задачам, потом по штрафу)
-        if scoring_mode == 'icpc':
-            scoreboard.sort(key=lambda p: (-p['total_score'], p['total_penalty']))
-        else:
-            scoreboard.sort(key=lambda p: -p['total_score'])
+        scoreboard = _compute_scoreboard(oly)
 
         state_to_cache = {
             'status': oly_data_copy['status'],
@@ -181,7 +166,57 @@ def _get_olympiad_state(olympiad_id):
         
         response = state_to_cache.copy()
         response['remaining_seconds'] = remaining_seconds
+        response['is_frozen'] = is_frozen
+        response['freeze_minutes'] = freeze_minutes
+        
+        # If frozen, return frozen scoreboard instead of live one
+        if is_frozen and oly.get('frozen_scoreboard'):
+            response['scoreboard'] = oly['frozen_scoreboard']
+        
         return response
+
+def _compute_scoreboard(oly):
+    """Helper function to compute scoreboard from olympiad data."""
+    scoreboard = []
+    scoring_mode = oly['config'].get('scoring', 'all_or_nothing')
+    
+    for p_id, p_data in oly['participants'].items(): 
+        total_score = 0
+        total_penalty = 0
+        
+        # [FIX] Нормализация ключей: превращаем все ID задач в строки
+        # Это предотвращает ошибку TypeError при jsonify (смесь int и str)
+        normalized_scores = {}
+        for k, v in p_data['scores'].items():
+            str_key = str(k)
+            # [FIX] Гарантируем, что все ключи в v тоже нормализованы
+            if isinstance(v, dict):
+                normalized_scores[str_key] = v
+            else:
+                normalized_scores[str_key] = {'score': 0, 'attempts': 0, 'passed': False, 'penalty': 0}
+
+        if scoring_mode == 'icpc':
+            total_score = sum(s.get('score', 0) for s in normalized_scores.values())
+            total_penalty = sum(s.get('penalty', 0) for s in normalized_scores.values() if s.get('passed'))
+        else:
+            total_score = sum(s.get('score', 0) for s in normalized_scores.values())
+        
+        scoreboard.append({
+            'participant_id': p_id, 
+            'nickname': p_data['nickname'],
+            'organization': p_data.get('organization', None),
+            'scores': normalized_scores,
+            'total_score': total_score,
+            'total_penalty': total_penalty 
+        })
+
+    # [FIX] ИСПРАВЛЕНА СОРТИРОВКА ДЛЯ ICPC (по решенным задачам, потом по штрафу)
+    if scoring_mode == 'icpc':
+        scoreboard.sort(key=lambda p: (-p['total_score'], p['total_penalty']))
+    else:
+        scoreboard.sort(key=lambda p: -p['total_score'])
+    
+    return scoreboard
 
 @app.socketio.on('join_room')
 def handle_join_room(data):
@@ -733,6 +768,8 @@ def olympiad_create():
         name = request.form.get('name', 'Olympiad')
         start_time_str = request.form.get('start_time_local')
         allowed_languages = request.form.getlist('allowed_languages')
+        freeze_minutes_str = request.form.get('freeze_minutes', '0')
+        freeze_minutes = int(freeze_minutes_str) if freeze_minutes_str else 0
         
         # Default to all languages if none selected
         if not allowed_languages:
@@ -764,7 +801,8 @@ def olympiad_create():
                 'duration_minutes': duration,
                 'scoring': scoring,
                 'mode': mode,
-                'allowed_languages': allowed_languages
+                'allowed_languages': allowed_languages,
+                'freeze_minutes': freeze_minutes
             }
 
             olympiads[olympiad_id] = {
@@ -777,11 +815,13 @@ def olympiad_create():
                 'participants': {},
                 'is_dirty': True,  
                 'first_solves': {},     
-                'cached_state': None    
+                'cached_state': None,
+                'frozen_scoreboard': None,
+                'freeze_triggered': False
             }
 
             try:
-                db.save_olympiad_config(olympiad_id, tasks_ordered, name=name, duration=duration, scoring=scoring, allowed_languages=allowed_languages)
+                db.save_olympiad_config(olympiad_id, tasks_ordered, name=name, duration=duration, scoring=scoring, allowed_languages=allowed_languages, freeze_minutes=freeze_minutes or None)
                 
                 if status == 'scheduled':
                     db.add_scheduled_olympiad(olympiad_id, name, start_timestamp, config_dict, tasks_ordered)
@@ -1109,7 +1149,10 @@ def olympiad_end(olympiad_id):
         tasks_details = db_results['tasks']
         participants_list = db_results['participants_list']
 
-    is_organizer = session.get(f'is_organizer_for_{olympiad_id}', False)
+    is_organizer = session.get(f'is_organizer_for_{olympiad_id}', False) or session.get('is_admin', False)
+    
+    # Check if frozen data exists for reveal ceremony
+    has_frozen_data = db.get_frozen_data(olympiad_id) is not None
     
     return render_template(
         'olympiad_end.html', 
@@ -1117,6 +1160,7 @@ def olympiad_end(olympiad_id):
         tasks=tasks_details,
         participants_list=participants_list,
         is_organizer=is_organizer,
+        has_frozen_data=has_frozen_data,
         olympiad_id=olympiad_id
     )
     
@@ -1171,19 +1215,36 @@ def olympiad_disqualify(olympiad_id, participant_id):
 def olympiad_finish_by_host(olympiad_id):
     
     oly_data_to_save = None
+    frozen_scoreboard = None
+    final_scoreboard = None
+    freeze_time = None
     
     with olympiad_lock:
         if olympiad_id in olympiads:
             olympiads[olympiad_id]['status'] = 'finished' 
             oly_data_to_save = olympiads[olympiad_id].copy()
+            
+            # Save frozen and final scoreboards for ICPC-style reveal
+            freeze_minutes = oly_data_to_save['config'].get('freeze_minutes', 0)
+            if freeze_minutes > 0 and oly_data_to_save.get('frozen_scoreboard'):
+                frozen_scoreboard = oly_data_to_save['frozen_scoreboard']
+                final_scoreboard = _compute_scoreboard(oly_data_to_save)
+                freeze_time = time.time()
+            
             session.pop(f'is_organizer_for_{olympiad_id}', None)
-
             del olympiads[olympiad_id] 
 
     socketio.emit('olympiad_finished', {'status': 'finished'}, to=olympiad_id)
     
     if oly_data_to_save:
         db.save_olympiad_data(olympiad_id, oly_data_to_save)
+        
+        # Save frozen data for reveal ceremony if applicable
+        if frozen_scoreboard and final_scoreboard:
+            try:
+                db.save_frozen_scoreboard(olympiad_id, frozen_scoreboard, final_scoreboard, freeze_time)
+            except Exception as e:
+                print(f"DB Error saving frozen data: {e}")
         
         # --- [FIX] Ставим метку finished в БД ---
         try:
@@ -1805,3 +1866,156 @@ def olympiad_print_cards(olympiad_id):
                            whitelist=whitelist, 
                            olympiad_id=olympiad_id,
                            olympiad_name=oly_name)
+
+# === ICPC-STYLE FREEZE/UNFREEZE SYSTEM ===
+
+@app.route('/olympiad/reveal/<olympiad_id>')
+@admin_required
+def olympiad_reveal(olympiad_id):
+    """Page for ICPC-style scoreboard reveal animation."""
+    frozen_data = db.get_frozen_data(olympiad_id)
+    
+    if not frozen_data:
+        flash('Нет сохраненных данных заморозки для этой олимпиады.', 'warning')
+        return redirect(url_for('olympiad_end', olympiad_id=olympiad_id))
+    
+    # Get olympiad details
+    db_results = db.get_olympiad_results(olympiad_id)
+    if not db_results:
+        flash('Олимпиада не найдена.', 'danger')
+        return redirect(url_for('admin_archive'))
+    
+    tasks = db_results['tasks']
+    config = db_results['results']
+    
+    return render_template('olympiad_reveal.html',
+                           olympiad_id=olympiad_id,
+                           frozen_scoreboard=frozen_data['frozen_scoreboard'],
+                           final_scoreboard=frozen_data['final_scoreboard'],
+                           tasks=tasks,
+                           config=config,
+                           is_revealed=frozen_data['is_revealed'])
+
+@app.route('/olympiad/api/frozen_data/<olympiad_id>')
+@admin_required
+def api_get_frozen_data(olympiad_id):
+    """API endpoint to get frozen and final scoreboards for reveal animation."""
+    frozen_data = db.get_frozen_data(olympiad_id)
+    
+    if not frozen_data:
+        return jsonify({'error': 'No frozen data available'}), 404
+    
+    return jsonify({
+        'frozen_scoreboard': frozen_data['frozen_scoreboard'],
+        'final_scoreboard': frozen_data['final_scoreboard'],
+        'freeze_time': frozen_data['freeze_time'],
+        'is_revealed': frozen_data['is_revealed']
+    })
+
+@app.route('/olympiad/api/mark_revealed/<olympiad_id>', methods=['POST'])
+@admin_required
+def api_mark_revealed(olympiad_id):
+    """API endpoint to mark olympiad as revealed after unfreeze animation."""
+    try:
+        db.mark_revealed(olympiad_id)
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/olympiad/api/export_frozen/<olympiad_id>')
+@admin_required
+def api_export_frozen(olympiad_id):
+    """Export frozen scoreboard data as JSON for external use."""
+    frozen_data = db.get_frozen_data(olympiad_id)
+    
+    if not frozen_data:
+        return jsonify({'error': 'No frozen data available'}), 404
+    
+    # Get olympiad details
+    db_results = db.get_olympiad_results(olympiad_id)
+    tasks = db_results['tasks'] if db_results else []
+    
+    export_data = {
+        'olympiad_id': olympiad_id,
+        'tasks': [{'id': t[0], 'title': t[1]} for t in tasks],
+        'frozen_scoreboard': frozen_data['frozen_scoreboard'],
+        'final_scoreboard': frozen_data['final_scoreboard'],
+        'freeze_time': frozen_data['freeze_time']
+    }
+    
+    response = app.response_class(
+        response=json.dumps(export_data, ensure_ascii=False, indent=2),
+        status=200,
+        mimetype='application/json'
+    )
+    response.headers['Content-Disposition'] = f'attachment; filename=frozen_scoreboard_{olympiad_id}.json'
+    return response
+
+def _determine_winners(scoreboard):
+    """
+    Determine 1st, 2nd, and 3rd place winners from scoreboard.
+    Returns dict with place numbers mapped to list of participants at that place.
+    Handles ties by giving same place to tied participants.
+    """
+    if not scoreboard:
+        return {1: [], 2: [], 3: []}
+    
+    winners = {1: [], 2: [], 3: []}
+    current_place = 1
+    previous_score = None
+    previous_penalty = None
+    participants_at_current_place = 0
+    
+    for i, participant in enumerate(scoreboard):
+        score = participant.get('total_score', 0)
+        penalty = participant.get('total_penalty', 0)
+        
+        if previous_score is not None:
+            # Check if this participant has a worse score/penalty
+            if score < previous_score or (score == previous_score and penalty > previous_penalty):
+                current_place += participants_at_current_place
+                participants_at_current_place = 0
+        
+        if current_place <= 3:
+            winners[current_place].append({
+                'nickname': participant.get('nickname'),
+                'organization': participant.get('organization'),
+                'total_score': score,
+                'total_penalty': penalty,
+                'participant_id': participant.get('participant_id')
+            })
+            participants_at_current_place += 1
+        
+        previous_score = score
+        previous_penalty = penalty
+        
+        if current_place > 3:
+            break
+    
+    return winners
+
+@app.route('/olympiad/api/winners/<olympiad_id>')
+def api_get_winners(olympiad_id):
+    """API endpoint to get automatic winner determination (1st, 2nd, 3rd place)."""
+    frozen_data = db.get_frozen_data(olympiad_id)
+    
+    # Use final scoreboard if available, otherwise get from results
+    if frozen_data and frozen_data['final_scoreboard']:
+        scoreboard = frozen_data['final_scoreboard']
+    else:
+        db_results = db.get_olympiad_results(olympiad_id)
+        if not db_results:
+            return jsonify({'error': 'Olympiad not found'}), 404
+        scoreboard = db_results['participants_list']
+    
+    winners = _determine_winners(scoreboard)
+    
+    return jsonify({
+        'olympiad_id': olympiad_id,
+        'winners': winners,
+        'places': {
+            1: 'Первое место (Золото)',
+            2: 'Второе место (Серебро)', 
+            3: 'Третье место (Бронза)'
+        }
+    })

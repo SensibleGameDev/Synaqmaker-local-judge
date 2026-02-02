@@ -1,0 +1,665 @@
+{% extends "base.html" %}
+{% block title %}🏆 Церемония раскрытия результатов{% endblock %}
+
+{% block content %}
+<style>
+    .reveal-container {
+        max-width: 98%;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    /* Scoreboard styles */
+    .scoreboard-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #1a1a2e;
+        color: #fff;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    
+    .scoreboard-table th,
+    .scoreboard-table td {
+        padding: 12px 8px;
+        text-align: center;
+        border-bottom: 1px solid #333;
+    }
+    
+    .scoreboard-table thead {
+        background: #0f0f23;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+    
+    .scoreboard-table thead th {
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 0.85em;
+        color: #a0a0c0;
+    }
+    
+    .scoreboard-row {
+        transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+    }
+    
+    .scoreboard-row:hover {
+        background: #252545 !important;
+    }
+    
+    /* Rank badges */
+    .rank-cell {
+        font-size: 1.3em;
+        font-weight: bold;
+        width: 60px;
+    }
+    
+    .rank-1 { color: #ffd700; }
+    .rank-2 { color: #c0c0c0; }
+    .rank-3 { color: #cd7f32; }
+    
+    /* Nickname cell */
+    .nickname-cell {
+        text-align: left !important;
+        font-weight: 600;
+        font-size: 1.1em;
+    }
+    
+    .org-cell {
+        text-align: left !important;
+        color: #888;
+        font-size: 0.9em;
+    }
+    
+    /* Task score cells */
+    .task-cell {
+        min-width: 60px;
+        font-family: 'Consolas', monospace;
+        font-weight: bold;
+        border-radius: 4px;
+        margin: 2px;
+    }
+    
+    .task-solved {
+        background: #28a745 !important;
+        color: #fff;
+    }
+    
+    .task-failed {
+        background: #dc3545 !important;
+        color: #fff;
+    }
+    
+    .task-pending {
+        background: #ffc107 !important;
+        color: #000;
+        animation: pulse-pending 1.5s infinite;
+    }
+    
+    @keyframes pulse-pending {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    
+    /* Reveal animation */
+    .revealing {
+        background: linear-gradient(90deg, #ffc107 0%, #ff9800 50%, #ffc107 100%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s ease-in-out;
+        color: #000;
+    }
+    
+    @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    
+    .reveal-success {
+        animation: flashGreen 1s ease-out;
+    }
+    
+    @keyframes flashGreen {
+        0% { background-color: rgba(40, 167, 69, 0.9); }
+        100% { background-color: transparent; }
+    }
+    
+    .reveal-fail {
+        animation: flashRed 1s ease-out;
+    }
+    
+    @keyframes flashRed {
+        0% { background-color: rgba(220, 53, 69, 0.9); }
+        100% { background-color: transparent; }
+    }
+    
+    /* Row movement animation */
+    .moving-up {
+        animation: moveUp 0.8s ease-out;
+    }
+    
+    @keyframes moveUp {
+        0% { transform: translateY(50px); opacity: 0.7; }
+        100% { transform: translateY(0); opacity: 1; }
+    }
+    
+    /* Focus highlight for current row being revealed */
+    .focus-row {
+        background: #2a2a5a !important;
+        box-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
+        transform: scale(1.02);
+        z-index: 50;
+    }
+    
+    /* Control panel */
+    .control-panel {
+        background: #1a1a2e;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    
+    .control-btn {
+        padding: 12px 24px;
+        font-size: 1.1em;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .btn-reveal {
+        background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+        color: #000;
+        font-weight: bold;
+    }
+    
+    .btn-reveal:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 15px rgba(255, 193, 7, 0.4);
+    }
+    
+    .btn-skip {
+        background: #6c757d;
+        color: #fff;
+    }
+    
+    .btn-auto {
+        background: #28a745;
+        color: #fff;
+    }
+    
+    /* Progress indicator */
+    .progress-indicator {
+        color: #a0a0c0;
+        font-size: 0.9em;
+    }
+    
+    /* Winner celebration */
+    .winner-banner {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #ffd700 0%, #ff9800 50%, #ffd700 100%);
+        padding: 40px 60px;
+        border-radius: 20px;
+        z-index: 1000;
+        text-align: center;
+        box-shadow: 0 0 50px rgba(255, 215, 0, 0.8);
+        animation: winnerAppear 0.5s ease-out;
+    }
+    
+    @keyframes winnerAppear {
+        0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+        100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+    
+    .winner-banner h1 {
+        color: #1a1a2e;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+    }
+    
+    .winner-banner .winner-name {
+        font-size: 3em;
+        font-weight: bold;
+        color: #000;
+    }
+    
+    /* Medal emoji sizes */
+    .medal-gold::before { content: '🥇'; font-size: 3em; }
+    .medal-silver::before { content: '🥈'; font-size: 3em; }
+    .medal-bronze::before { content: '🥉'; font-size: 3em; }
+    
+    /* Overlay for winner announcement */
+    .overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 999;
+    }
+    
+    /* Speed control */
+    .speed-control {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #fff;
+    }
+    
+    .speed-slider {
+        width: 150px;
+    }
+</style>
+
+<div class="reveal-container">
+    <div class="text-center mb-4">
+        <h1 class="display-4 text-white">🏆 ICPC World Finals Style Reveal</h1>
+        <p class="lead text-muted">Олимпиада: {{ olympiad_id }}</p>
+    </div>
+    
+    <div class="control-panel">
+        <div class="d-flex gap-3 flex-wrap">
+            <button id="btn-reveal-next" class="control-btn btn-reveal" onclick="revealNext()">
+                <i class="bi bi-play-fill"></i> Раскрыть следующий
+            </button>
+            <button id="btn-auto-reveal" class="control-btn btn-auto" onclick="startAutoReveal()">
+                <i class="bi bi-fast-forward-fill"></i> Авто раскрытие
+            </button>
+            <button id="btn-stop-auto" class="control-btn btn-skip d-none" onclick="stopAutoReveal()">
+                <i class="bi bi-pause-fill"></i> Остановить
+            </button>
+            <button id="btn-skip-to-end" class="control-btn btn-skip" onclick="skipToEnd()">
+                <i class="bi bi-skip-end-fill"></i> Показать итог
+            </button>
+        </div>
+        
+        <div class="speed-control">
+            <label for="speed-slider">Скорость:</label>
+            <input type="range" id="speed-slider" class="speed-slider" min="500" max="3000" value="1500" step="100">
+            <span id="speed-value">1.5s</span>
+        </div>
+        
+        <div class="progress-indicator">
+            <span id="reveal-progress">Ожидание начала...</span>
+        </div>
+    </div>
+    
+    <div class="card bg-dark">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="scoreboard-table" id="scoreboard">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th style="text-align: left;">Участник</th>
+                            <th style="text-align: left;">Организация</th>
+                            {% set letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
+                            {% for task in tasks %}
+                            <th>{{ letters[loop.index0] }}</th>
+                            {% endfor %}
+                            <th>Решено</th>
+                            <th>Штраф</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scoreboard-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-4 text-center">
+        <a href="{{ url_for('olympiad_end', olympiad_id=olympiad_id) }}" class="btn btn-outline-light">
+            <i class="bi bi-arrow-left"></i> Вернуться к результатам
+        </a>
+        <a href="{{ url_for('api_export_frozen', olympiad_id=olympiad_id) }}" class="btn btn-outline-info">
+            <i class="bi bi-download"></i> Экспорт JSON
+        </a>
+        <button onclick="showWinners()" class="btn btn-warning">
+            <i class="bi bi-trophy-fill"></i> Показать победителей
+        </button>
+    </div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div class="winner-banner" id="winner-banner">
+    <div id="winner-medal"></div>
+    <h1 id="winner-place"></h1>
+    <div class="winner-name" id="winner-name"></div>
+    <div id="winner-org" class="text-muted mt-2"></div>
+    <button class="btn btn-dark mt-3" onclick="hideWinnerBanner()">Закрыть</button>
+</div>
+
+<script>
+    // Data from server
+    const frozenScoreboard = {{ frozen_scoreboard | tojson | safe }};
+    const finalScoreboard = {{ final_scoreboard | tojson | safe }};
+    const taskIds = [{% for task in tasks %}{{ task[0] }}{% if not loop.last %}, {% endif %}{% endfor %}];
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    
+    // State
+    let currentBoard = JSON.parse(JSON.stringify(frozenScoreboard)); // Deep copy
+    let revealQueue = [];
+    let autoRevealInterval = null;
+    let isRevealing = false;
+    let revealedCount = 0;
+    let totalToReveal = 0;
+    
+    // Initialize reveal queue by finding pending submissions
+    function initRevealQueue() {
+        revealQueue = [];
+        
+        // Compare frozen and final to find differences
+        const frozenMap = new Map(frozenScoreboard.map(p => [p.participant_id, p]));
+        const finalMap = new Map(finalScoreboard.map(p => [p.participant_id, p]));
+        
+        // Process from bottom of standings up (ICPC style)
+        const sortedFrozen = [...frozenScoreboard].reverse();
+        
+        sortedFrozen.forEach(frozenP => {
+            const finalP = finalMap.get(frozenP.participant_id);
+            if (!finalP) return;
+            
+            // Check each task for changes
+            taskIds.forEach(taskId => {
+                const taskKey = String(taskId);
+                const frozenTask = frozenP.scores[taskKey] || {};
+                const finalTask = finalP.scores[taskKey] || {};
+                
+                // If task was pending (had attempts but not passed in frozen, but has result in final)
+                const frozenPassed = frozenTask.passed || false;
+                const finalPassed = finalTask.passed || false;
+                const frozenAttempts = frozenTask.attempts || 0;
+                const finalAttempts = finalTask.attempts || 0;
+                
+                // Detect changes that happened during freeze
+                if (finalAttempts > frozenAttempts || (finalPassed && !frozenPassed)) {
+                    revealQueue.push({
+                        participant_id: frozenP.participant_id,
+                        task_id: taskId,
+                        frozenData: frozenTask,
+                        finalData: finalTask,
+                        nickname: frozenP.nickname
+                    });
+                }
+            });
+        });
+        
+        totalToReveal = revealQueue.length;
+        updateProgress();
+    }
+    
+    // Render scoreboard
+    function renderScoreboard() {
+        const tbody = document.getElementById('scoreboard-body');
+        tbody.innerHTML = '';
+        
+        // Sort current board
+        currentBoard.sort((a, b) => {
+            if (b.total_score !== a.total_score) return b.total_score - a.total_score;
+            return a.total_penalty - b.total_penalty;
+        });
+        
+        currentBoard.forEach((participant, index) => {
+            const rank = index + 1;
+            const tr = document.createElement('tr');
+            tr.className = 'scoreboard-row';
+            tr.dataset.participantId = participant.participant_id;
+            
+            // Rank cell
+            let rankClass = '';
+            let rankContent = rank;
+            if (rank === 1) { rankClass = 'rank-1'; rankContent = '🥇'; }
+            else if (rank === 2) { rankClass = 'rank-2'; rankContent = '🥈'; }
+            else if (rank === 3) { rankClass = 'rank-3'; rankContent = '🥉'; }
+            
+            let tasksHtml = '';
+            taskIds.forEach(taskId => {
+                const taskKey = String(taskId);
+                const taskData = participant.scores[taskKey] || {};
+                let cellClass = 'task-cell';
+                let cellContent = '.';
+                
+                // Check if this task is pending (has attempts in frozen but changed in final)
+                const finalP = finalScoreboard.find(p => p.participant_id === participant.participant_id);
+                const finalTask = finalP ? (finalP.scores[taskKey] || {}) : {};
+                const isPending = (finalTask.attempts || 0) > (taskData.attempts || 0) || 
+                                 (finalTask.passed && !taskData.passed);
+                
+                if (taskData.passed) {
+                    cellClass += ' task-solved';
+                    cellContent = `+${taskData.attempts > 0 ? taskData.attempts : ''}`;
+                } else if (isPending) {
+                    cellClass += ' task-pending';
+                    cellContent = '?';
+                } else if (taskData.attempts > 0) {
+                    cellClass += ' task-failed';
+                    cellContent = `-${taskData.attempts}`;
+                }
+                
+                tasksHtml += `<td class="${cellClass}" data-task="${taskId}">${cellContent}</td>`;
+            });
+            
+            tr.innerHTML = `
+                <td class="rank-cell ${rankClass}">${rankContent}</td>
+                <td class="nickname-cell">${participant.nickname}</td>
+                <td class="org-cell">${participant.organization || '-'}</td>
+                ${tasksHtml}
+                <td class="text-success fw-bold">${participant.total_score}</td>
+                <td class="text-secondary">${participant.total_penalty}</td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+    }
+    
+    // Reveal next pending submission
+    async function revealNext() {
+        if (isRevealing || revealQueue.length === 0) return;
+        
+        isRevealing = true;
+        const reveal = revealQueue.shift();
+        revealedCount++;
+        updateProgress();
+        
+        // Find the row and cell
+        const row = document.querySelector(`tr[data-participant-id="${reveal.participant_id}"]`);
+        const cell = row ? row.querySelector(`td[data-task="${reveal.task_id}"]`) : null;
+        
+        if (row && cell) {
+            // Focus on row
+            row.classList.add('focus-row');
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Add revealing animation to cell
+            cell.classList.add('revealing');
+            
+            await sleep(getSpeed() / 2);
+            
+            // Update the cell with final result
+            const finalData = reveal.finalData;
+            cell.classList.remove('revealing', 'task-pending');
+            
+            if (finalData.passed) {
+                cell.classList.add('task-solved', 'reveal-success');
+                cell.textContent = `+${finalData.attempts > 0 ? finalData.attempts : ''}`;
+            } else if (finalData.attempts > 0) {
+                cell.classList.add('task-failed', 'reveal-fail');
+                cell.textContent = `-${finalData.attempts}`;
+            }
+            
+            // Update the participant data in currentBoard
+            const participant = currentBoard.find(p => p.participant_id === reveal.participant_id);
+            if (participant) {
+                participant.scores[String(reveal.task_id)] = finalData;
+                
+                // Recalculate totals
+                let totalScore = 0;
+                let totalPenalty = 0;
+                Object.values(participant.scores).forEach(s => {
+                    if (s.passed) {
+                        totalScore++;
+                        totalPenalty += s.penalty || 0;
+                    }
+                });
+                participant.total_score = totalScore;
+                participant.total_penalty = totalPenalty;
+            }
+            
+            await sleep(getSpeed() / 2);
+            
+            // Remove focus and re-render (with position changes)
+            row.classList.remove('focus-row');
+            renderScoreboard();
+        }
+        
+        isRevealing = false;
+        
+        // Check if reveal is complete
+        if (revealQueue.length === 0) {
+            document.getElementById('reveal-progress').textContent = '✓ Раскрытие завершено!';
+            stopAutoReveal();
+        }
+    }
+    
+    // Auto reveal mode
+    function startAutoReveal() {
+        if (autoRevealInterval) return;
+        
+        document.getElementById('btn-auto-reveal').classList.add('d-none');
+        document.getElementById('btn-stop-auto').classList.remove('d-none');
+        
+        autoRevealInterval = setInterval(() => {
+            if (revealQueue.length > 0 && !isRevealing) {
+                revealNext();
+            } else if (revealQueue.length === 0) {
+                stopAutoReveal();
+            }
+        }, getSpeed());
+    }
+    
+    function stopAutoReveal() {
+        if (autoRevealInterval) {
+            clearInterval(autoRevealInterval);
+            autoRevealInterval = null;
+        }
+        document.getElementById('btn-auto-reveal').classList.remove('d-none');
+        document.getElementById('btn-stop-auto').classList.add('d-none');
+    }
+    
+    // Skip to end - show final results immediately
+    function skipToEnd() {
+        stopAutoReveal();
+        currentBoard = JSON.parse(JSON.stringify(finalScoreboard));
+        revealQueue = [];
+        renderScoreboard();
+        document.getElementById('reveal-progress').textContent = '✓ Показаны итоговые результаты';
+    }
+    
+    // Show winners announcement
+    async function showWinners() {
+        const response = await fetch(`/olympiad/api/winners/{{ olympiad_id }}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+        
+        const winners = data.winners;
+        
+        // Show each place with animation
+        for (let place of [3, 2, 1]) {
+            if (winners[place] && winners[place].length > 0) {
+                for (const winner of winners[place]) {
+                    await showWinnerBanner(place, winner);
+                    await sleep(3000);
+                    hideWinnerBanner();
+                    await sleep(500);
+                }
+            }
+        }
+    }
+    
+    function showWinnerBanner(place, winner) {
+        return new Promise(resolve => {
+            const overlay = document.getElementById('overlay');
+            const banner = document.getElementById('winner-banner');
+            const medal = document.getElementById('winner-medal');
+            const placeEl = document.getElementById('winner-place');
+            const nameEl = document.getElementById('winner-name');
+            const orgEl = document.getElementById('winner-org');
+            
+            medal.className = '';
+            if (place === 1) medal.className = 'medal-gold';
+            else if (place === 2) medal.className = 'medal-silver';
+            else if (place === 3) medal.className = 'medal-bronze';
+            
+            const placeNames = {
+                1: '🥇 ПЕРВОЕ МЕСТО',
+                2: '🥈 ВТОРОЕ МЕСТО',
+                3: '🥉 ТРЕТЬЕ МЕСТО'
+            };
+            
+            placeEl.textContent = placeNames[place];
+            nameEl.textContent = winner.nickname;
+            orgEl.textContent = winner.organization || '';
+            
+            overlay.style.display = 'block';
+            banner.style.display = 'block';
+            
+            setTimeout(resolve, 100);
+        });
+    }
+    
+    function hideWinnerBanner() {
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('winner-banner').style.display = 'none';
+    }
+    
+    // Utility functions
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    function getSpeed() {
+        return parseInt(document.getElementById('speed-slider').value);
+    }
+    
+    function updateProgress() {
+        const remaining = revealQueue.length;
+        document.getElementById('reveal-progress').textContent = 
+            `Раскрыто: ${revealedCount} / ${totalToReveal} (осталось: ${remaining})`;
+    }
+    
+    // Speed slider
+    document.getElementById('speed-slider').addEventListener('input', function() {
+        document.getElementById('speed-value').textContent = (this.value / 1000).toFixed(1) + 's';
+        
+        // Restart auto reveal with new speed if active
+        if (autoRevealInterval) {
+            stopAutoReveal();
+            startAutoReveal();
+        }
+    });
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+        initRevealQueue();
+        renderScoreboard();
+    });
+</script>
+{% endblock %}

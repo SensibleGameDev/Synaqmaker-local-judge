@@ -81,7 +81,10 @@
         <div class="card-header d-flex justify-content-between align-items-center p-3">
             <div class="d-flex align-items-center">
                 <h3 class="mb-0 me-3">🏆 LIVE BOARD</h3>
-                <span class="badge bg-danger animate__animated animate__pulse animate__infinite">LIVE</span>
+                <span class="badge bg-danger animate__animated animate__pulse animate__infinite" id="live-badge">LIVE</span>
+                <span class="badge bg-info ms-2 d-none" id="frozen-badge">
+                    <i class="bi bi-snow"></i> FROZEN
+                </span>
             </div>
             <div class="text-end">
                 <h2 id="timer" class="display-6 font-monospace text-warning mb-0">--:--:--</h2>
@@ -159,6 +162,18 @@
         }
         serverRemainingSeconds = data.remaining_seconds;
         startLocalTimer(); 
+        
+        // Handle freeze indicator
+        const frozenBadge = document.getElementById('frozen-badge');
+        const liveBadge = document.getElementById('live-badge');
+        if (data.is_frozen) {
+            frozenBadge.classList.remove('d-none');
+            document.getElementById('status-text').innerText = "Таблица заморожена";
+        } else {
+            frozenBadge.classList.add('d-none');
+            document.getElementById('status-text').innerText = "Онлайн";
+        }
+        
         renderTable(data);
     });
 

@@ -1,0 +1,310 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .spectator-container {
+        max-width: 95%;
+        margin: 0 auto;
+        padding-top: 20px;
+    }
+    .scoreboard-row {
+        transition: transform 0.6s ease;
+        background: #2b2b2b;
+        border-bottom: 1px solid #444;
+        position: relative;
+    }
+    .scoreboard-header {
+        background: #1a1a1a;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .cell-score {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        font-size: 1.1em;
+        vertical-align: middle;
+    }
+    .rank-cell {
+        font-size: 1.3em;
+        font-weight: bold;
+        color: #ffc107;
+        width: 60px;
+        text-align: center;
+        vertical-align: middle;
+    }
+    
+    /* Анимации */
+    @keyframes flashGreen {
+        0% { background-color: rgba(40, 167, 69, 0.8); }
+        100% { background-color: #2b2b2b; }
+    }
+    .flash-success {
+        animation: flashGreen 2s ease-out;
+    }
+
+    @keyframes pulseYellow {
+        0% { background-color: rgba(255, 193, 7, 0.1); }
+        50% { background-color: rgba(255, 193, 7, 0.4); }
+        100% { background-color: rgba(255, 193, 7, 0.1); }
+    }
+    .pending-cell {
+        animation: pulseYellow 1.5s infinite;
+        border: 2px solid #ffc107 !important;
+        color: #ffc107 !important;
+    }
+
+    /* First To Solve */
+    .first-to-solve {
+        background-color: #075a4a !important; /* Зеленый */
+        border-color: #198754 !important;
+        color: #fff !important;
+        position: relative;
+    }
+    .first-to-solve::after {
+        content: '★';
+        position: absolute;
+        top: -8px;
+        right: -5px;
+        font-size: 1.2em;
+        color: #ffc107;
+        text-shadow: 1px 1px 2px black;
+    }
+</style>
+
+<div class="spectator-container">
+    <div class="card bg-dark text-white shadow-lg">
+        <div class="card-header d-flex justify-content-between align-items-center p-3">
+            <div class="d-flex align-items-center">
+                <h3 class="mb-0 me-3">🏆 LIVE BOARD</h3>
+                <span class="badge bg-danger animate__animated animate__pulse animate__infinite">LIVE</span>
+            </div>
+            <div class="text-end">
+                <h2 id="timer" class="display-6 font-monospace text-warning mb-0">--:--:--</h2>
+                <small id="status-text" class="text-secondary">Подключение...</small>
+            </div>
+        </div>
+        
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" id="main-table">
+                    <thead class="scoreboard-header">
+                        <tr id="header-row">
+                            <th class="text-center">#</th>
+                            <th>Участник</th>
+                            <th>Орг.</th>
+                            <th class="text-center text-info" title="Total Score">SC</th>
+                            <th class="text-center text-secondary" title="Total Penalty">PEN</th>
+                            </tr>
+                    </thead>
+                    <tbody id="scoreboard-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+
+<script>
+    const socket = io({transports: ['websocket']});
+    const olympiadId = "{{ olympiad_id }}";
+    
+    // Глобальные переменные
+    let serverRemainingSeconds = 0;
+    let timerInterval = null;
+    let previousScores = {}; 
+    let previousPositions = {}; 
+    let currentTaskIds = []; 
+
+    // --- ТАЙМЕР ---
+    function startLocalTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        
+        timerInterval = setInterval(() => {
+            if (serverRemainingSeconds > 0) {
+                serverRemainingSeconds--;
+                updateTimerDisplay(serverRemainingSeconds);
+            } else if (serverRemainingSeconds <= 0) {
+                updateTimerDisplay(0);
+                document.getElementById('status-text').innerText = "Время вышло";
+            }
+        }, 1000);
+    }
+
+    function updateTimerDisplay(seconds) {
+        if (seconds < 0) seconds = 0;
+        const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+        const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+        document.getElementById('timer').innerText = `${h}:${m}:${s}`;
+    }
+
+    // --- SOCKET EVENTS ---
+    socket.on('connect', () => {
+        console.log("Spectator connected");
+        socket.emit('join_room', { room: olympiadId, role: 'spectator' });
+        document.getElementById('status-text').innerText = "Онлайн";
+    });
+
+    socket.on('full_status_update', (data) => {
+        if (data.status === 'finished') {
+            window.location.reload(); 
+            return;
+        }
+        serverRemainingSeconds = data.remaining_seconds;
+        startLocalTimer(); 
+        renderTable(data);
+    });
+
+    socket.on('submission_pending', (data) => {
+        const row = document.querySelector(`tr[data-id="${data.participant_id}"]`);
+        if (row && currentTaskIds.length > 0) {
+            const taskIndex = currentTaskIds.indexOf(parseInt(data.task_id));
+            if (taskIndex !== -1) {
+                // +5 = Rank + Name + Org + Score + Penalty
+                const cell = row.children[taskIndex + 5]; 
+                if (cell) {
+                    cell.innerHTML = '<div class="spinner-border spinner-border-sm text-warning" role="status"></div>';
+                    cell.classList.add('pending-cell');
+                }
+            }
+        }
+    });
+
+    socket.on('olympiad_finished', () => {
+        alert("Олимпиада завершена!");
+        window.location.reload();
+    });
+
+    // --- РЕНДЕР ТАБЛИЦЫ ---
+    function renderTable(data) {
+        const tbody = document.getElementById('scoreboard-body');
+        const participants = data.scoreboard; 
+        currentTaskIds = data.config.task_ids;
+
+        // Шапка таблицы
+        const headerRow = document.getElementById('header-row');
+        while (headerRow.children.length > 5) {
+            headerRow.removeChild(headerRow.lastChild);
+        }
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        currentTaskIds.forEach((tid, index) => {
+            if (headerRow.children.length < 5 + currentTaskIds.length) {
+                const th = document.createElement('th');
+                th.className = "text-center";
+                th.innerText = letters[index % letters.length];
+                th.title = `Task ID: ${tid}`;
+                headerRow.appendChild(th);
+            }
+        });
+
+        // Запоминаем позиции для FLIP анимации
+        const existingRows = Array.from(tbody.children);
+        existingRows.forEach(row => {
+            previousPositions[row.dataset.id] = row.getBoundingClientRect().top;
+        });
+
+        tbody.innerHTML = '';
+
+        // ГЛАВНЫЙ ЦИКЛ ПО УЧАСТНИКАМ
+        // Здесь мы используем переменную 'p'
+        participants.forEach((p, index) => {
+            const tr = document.createElement('tr');
+            tr.className = 'scoreboard-row';
+            tr.dataset.id = p.participant_id;
+
+            // Анимация вспышки при наборе очков
+            let shouldFlash = false;
+            if (previousScores[p.participant_id] !== undefined) {
+                if (p.total_score > previousScores[p.participant_id]) {
+                    shouldFlash = true;
+                }
+            }
+            previousScores[p.participant_id] = p.total_score;
+            if (shouldFlash) tr.classList.add('flash-success');
+
+            // Ранг
+            let rankHtml = `<span class="badge bg-secondary rounded-pill" style="min-width:30px">${index + 1}</span>`;
+            if (index === 0) rankHtml = '🥇';
+            if (index === 1) rankHtml = '🥈';
+            if (index === 2) rankHtml = '🥉';
+
+            let tasksHtml = '';
+            
+            // ВНУТРЕННИЙ ЦИКЛ ПО ЗАДАЧАМ
+            currentTaskIds.forEach(tid => {
+                const taskData = p.scores[tid]; // Переменная p здесь доступна!
+                let cellClass = '';
+                let cellContent = '.';
+                
+                // Проверка First To Solve
+                // Используем String(tid), так как ключи в JSON объекте всегда строки
+                const isFirstSolver = (data.first_solves && data.first_solves[String(tid)] === p.participant_id);
+
+                if (data.config.scoring === 'icpc') {
+                    if (taskData.passed) {
+                        cellClass = 'bg-success text-white border-success';
+                        cellContent = `+${taskData.attempts > 0 ? taskData.attempts : ''}<br><small style="font-size:0.7em">${taskData.penalty}</small>`;
+                        
+                        if (isFirstSolver) cellClass += ' first-to-solve';
+
+                    } else if (taskData.attempts > 0) {
+                        cellClass = 'bg-danger text-white border-danger';
+                        cellContent = `-${taskData.attempts}`;
+                    }
+                } else {
+                    // Points
+                    if (taskData.score > 0) {
+                        cellClass = taskData.score === 100 ? 'bg-success text-white' : 'text-warning';
+                        cellContent = taskData.score;
+                        
+                        if (isFirstSolver && taskData.score === 100) cellClass += ' first-to-solve';
+                    } else if (taskData.attempts > 0) {
+                        cellContent = '0';
+                        cellClass = 'text-danger';
+                    }
+                }
+                tasksHtml += `<td class="text-center cell-score ${cellClass}">${cellContent}</td>`;
+            });
+
+            tr.innerHTML = `
+                <td class="rank-cell">${rankHtml}</td>
+                <td>
+                    <div style="font-weight:bold; font-size:1.1em">${p.nickname}</div>
+                </td>
+                <td><span class="badge bg-dark border border-secondary">${p.organization || '-'}</span></td>
+                <td class="text-center text-info fs-5 fw-bold">${p.total_score}</td>
+                <td class="text-center text-secondary fs-6 fw-bold">${p.total_penalty}</td>
+                ${tasksHtml}
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // FLIP анимация
+        requestAnimationFrame(() => {
+            const newRows = Array.from(tbody.children);
+            newRows.forEach(row => {
+                const newTop = row.getBoundingClientRect().top;
+                const oldTop = previousPositions[row.dataset.id];
+
+                if (oldTop !== undefined && oldTop !== newTop) {
+                    const delta = oldTop - newTop;
+                    row.style.transform = `translateY(${delta}px)`;
+                    row.style.transition = 'none';
+
+                    requestAnimationFrame(() => {
+                        row.style.transition = 'transform 0.6s ease';
+                        row.style.transform = '';
+                    });
+                }
+            });
+        });
+    }
+</script>
+{% endblock %}

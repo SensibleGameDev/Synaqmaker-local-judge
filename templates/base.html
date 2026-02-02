@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Synaqmaker{% endblock %}</title>
+
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/codemirror.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/material-darker.min.css') }}">
+
+    <style>
+        body { background-color: #f8f9fa; }
+        
+        .code-area { 
+            font-family: monospace; 
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-width: 100%;
+        }
+        
+        /* --- ФИКСЫ ДЛЯ CODEMIRROR --- */
+        
+        .CodeMirror {
+            height: 400px !important;
+            border: 1px solid #ced4da;
+            border-radius: .25rem;
+            font-size: 14px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            /* Исправление цвета курсора и фона */
+            background: #fff;
+            color: black;
+        }
+
+        /* Колонка с номерами строк */
+        .CodeMirror-gutters {
+            border-right: 1px solid #ddd;
+            background-color: #f7f7f7;
+            white-space: nowrap;
+            z-index: 20; /* Номера строк всегда выше текста */
+            /* Фиксируем минимальную ширину колонки, чтобы она не схлопывалась */
+            min-width: 30px; 
+        }
+        
+        /* !!! ВАЖНО: ДВИГАЕМ ВЕСЬ ТЕКСТ ВПРАВО !!! */
+        .CodeMirror-lines {
+            /* Добавляем большой отступ слева для всего контейнера с текстом */
+            padding-left: 35px !important; 
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+        
+        /* Дополнительный отступ для самой строки (для надежности) */
+        .CodeMirror pre.CodeMirror-line, 
+        .CodeMirror pre.CodeMirror-line-like {
+            padding-left: 4px !important; 
+        }
+        
+        /* Фикс скроллбара */
+        .CodeMirror-scroll {
+            padding-bottom: 30px;
+        }
+    </style>
+</head>
+<div id="connection-lost-banner" class="alert alert-danger text-center fw-bold fixed-top rounded-0 m-0 shadow" 
+     style="display: none; z-index: 9999; border-bottom: 2px solid darkred;">
+    <i class="bi bi-wifi-off"></i> НЕТ СВЯЗИ С СЕРВЕРОМ. ПРОВЕРЯЕМ ПОДКЛЮЧЕНИЕ...
+</div>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+    {% if session.get('is_admin') %}
+        <a class="navbar-brand" href="{{ url_for('index') }}">
+            <i class="bi bi-check2-square"></i> Synaqmaker
+        </a>
+    {% else %}
+        <a class="navbar-brand" href="{{ url_for('olympiad_index') }}">
+            <i class="bi bi-check2-square"></i> Synaqmaker
+        </a>
+    {% endif %}
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+    </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+    {% if session.get('is_admin') %}
+    <li class="nav-item">
+        <a class="nav-link {% if request.path == url_for('index') %}active{% endif %}" href="{{ url_for('index') }}">Проверка решений</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if 'tasks' in request.path %}active{% endif %}" href="{{ url_for('tasks_list') }}">Задачи</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if 'archive' in request.path %}active{% endif %}" href="{{ url_for('admin_archive') }}">
+            <i class="bi bi-archive"></i> Архив
+        </a>
+    </li>
+    {% endif %}
+    
+    <li class="nav-item">
+        <a class="nav-link {% if 'olympiad' in request.path %}active{% endif %}" href="{{ url_for('olympiad_index') }}">Олимпиада</a>
+    </li>
+</ul>
+    <ul class="navbar-nav">
+        {% if session.get('is_admin') %}
+            <li class="nav-item">
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Выйти</a>
+            </li>
+        {% else %}
+            <li class="nav-item">
+                <a href="{{ url_for('login') }}" class="btn btn-outline-light">Войти как организатор</a>
+            </li>
+        {% endif %}
+    </ul>
+</div>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="text-center text-muted py-4 mt-4 bg-light">
+        <p>&copy;Synaqmaker local judge (c) Copyright 2025-2026 Дулат Акбулатов </p>
+        <p>Версия сборки v1.0.6</p>
+    </footer>
+    
+    
+    <script>
+        window.MathJax = {
+            tex: {
+                // Разрешаем писать формулы через $...$ (как на Codeforces)
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            svg: {
+                fontCache: 'global'
+            },
+            options: {
+                // Игнорируем теги, где рендеринг не нужен
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            }
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/marked.min.js') }}"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Находим все элементы, где должен быть Markdown
+            const mdElements = document.querySelectorAll('.markdown-content');
+
+            mdElements.forEach(el => {
+                // 1. Берем исходный текст (например, "**Жирный**")
+                const rawText = el.textContent;
+                
+                // 2. Превращаем Markdown в HTML (<p><strong>Жирный</strong></p>)
+                // breaks: true позволяет переносить строки нажатием Enter (как в мессенджерах)
+                const htmlContent = marked.parse(rawText, { breaks: true });
+                
+                // 3. Вставляем обратно
+                el.innerHTML = htmlContent;
+            });
+
+            // 4. Просим MathJax перерисовать формулы, если они были внутри Markdown
+            if (window.MathJax) {
+                MathJax.typeset();
+            }
+        });
+    </script>
+    <script id="MathJax-script" async src="{{ url_for('static', filename='js/mathjax/tex-mml-chtml.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/codemirror.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/python.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/clike.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/matchbrackets.min.js') }}"></script>
+
+  <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    {% block scripts %}{% endblock %}
+
+    
+</body>
+</html>

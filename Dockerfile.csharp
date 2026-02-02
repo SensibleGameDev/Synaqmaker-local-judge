@@ -1,0 +1,15 @@
+
+FROM python:3.9-slim
+
+# Установка зависимостей для Mono и C#
+RUN apt-get update && \
+    apt-get install -y mono-mcs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Настройка пользователя (как и раньше)
+RUN useradd -m -u 1000 appuser
+WORKDIR /home/appuser
+USER appuser
+
+# Создаем рабочую папку
+RUN mkdir -p /home/appuser/run

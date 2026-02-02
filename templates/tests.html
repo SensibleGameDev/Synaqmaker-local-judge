@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Управление тестами{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Тесты для задачи: {{ task[1] }}</h2>
+    <a href="{{ url_for('tasks_list') }}" class="btn btn-secondary">Назад к задачам</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<div class="row">
+    <div class="col-md-4">
+        
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Импорт Excel
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('import_tests_from_excel', task_id=task[0]) }}" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Файл .xlsx (Input | Output)</label>
+                        <input class="form-control" type="file" name="tests_file" accept=".xlsx, .xls" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Лимит времени (сек)</label>
+                        <input type="number" step="0.1" class="form-control" name="time_limit_excel" value="1.0">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Загрузить Excel</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-file-earmark-zip"></i> Импорт ZIP (Big Tests)
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('import_tests_from_zip', task_id=task[0]) }}" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Архив .zip</label>
+                        <input class="form-control" type="file" name="zip_file" accept=".zip" required>
+                        <div class="form-text small text-muted">
+                            Файлы внутри: <code>01</code> и <code>01.a</code> для первого теста, <code>02</code> и <code>02.a</code> для второго и т.д.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Лимит времени (сек)</label>
+                        <input type="number" step="0.1" class="form-control" name="time_limit_zip" value="1.0">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Загрузить ZIP</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header">
+                <i class="bi bi-plus-circle"></i> Добавить один тест
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('add_test', task_id=task[0]) }}" class="btn btn-outline-primary w-100">
+                    Открыть форму добавления
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-bold">Список тестов ({{ tests|length }})</span>
+                <span class="badge bg-secondary">Scrollable view</span>
+            </div>
+            
+            <div class="card-body p-0" style="max-height: 75vh; overflow-y: auto;">
+                <table class="table table-hover table-striped mb-0 text-center align-middle">
+                    <thead class="table-dark sticky-top">
+                        <tr>
+                            <th style="width: 5%">#</th>
+                            <th style="width: 35%">Ввод</th>
+                            <th style="width: 35%">Вывод</th>
+                            <th style="width: 10%">Limit</th>
+                            <th style="width: 15%">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for test in tests %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            
+                            <td class="text-start font-monospace small text-muted">
+                                {{ test['test_input'][:60] }}
+                                {% if test['test_input']|length > 60 %}
+                                    <span class="text-primary fw-bold">...</span>
+                                    <br>
+                                    <span class="badge bg-light text-dark border mt-1">
+                                        {{ test['test_input']|length }} chars
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td class="text-start font-monospace small text-muted">
+                                {{ test['expected_output'][:60] }}
+                                {% if test['expected_output']|length > 60 %}
+                                    <span class="text-primary fw-bold">...</span>
+                                    <br>
+                                    <span class="badge bg-light text-dark border mt-1">
+                                        {{ test['expected_output']|length }} chars
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td>{{ test['time_limit'] }}s</td>
+                            
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-info text-white" 
+                                            onclick="viewTest({{ test['id'] }}, {{ loop.index }})"
+                                            title="Посмотреть полностью">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    
+                                    <a href="{{ url_for('edit_test', task_id=task[0], test_id=test['id']) }}" class="btn btn-warning" title="Редактировать">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    
+                                    <form action="{{ url_for('delete_test', task_id=task[0], test_id=test['id']) }}" method="POST" onsubmit="return confirm('Удалить тест?');" style="display:inline;">
+                                        <button type="submit" class="btn btn-danger" title="Удалить">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+
+                                <script id="input-full-{{ test['id'] }}" type="text/plain">{{ test['test_input'] }}</script>
+                                <script id="output-full-{{ test['id'] }}" type="text/plain">{{ test['expected_output'] }}</script>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-muted py-4">Тестов пока нет. Загрузите их!</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="viewTestModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Просмотр теста #<span id="modalTestNum"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="fw-bold text-success">Входные данные (Input):</h6>
+                        <div class="position-relative">
+                            <textarea id="modalInput" class="form-control font-monospace bg-light" rows="15" readonly></textarea>
+                            <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyToClipboard('modalInput')">Copy</button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-bold text-primary">Выходные данные (Output):</h6>
+                        <div class="position-relative">
+                            <textarea id="modalOutput" class="form-control font-monospace bg-light" rows="15" readonly></textarea>
+                            <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyToClipboard('modalOutput')">Copy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Функция открытия модалки
+    function viewTest(testId, index) {
+        // Достаем текст из скрытых скриптов
+        const inputFull = document.getElementById('input-full-' + testId).innerHTML;
+        const outputFull = document.getElementById('output-full-' + testId).innerHTML;
+
+        // Заполняем модалку
+        document.getElementById('modalTestNum').innerText = index;
+        document.getElementById('modalInput').value = inputFull;
+        document.getElementById('modalOutput').value = outputFull;
+
+        // Показываем
+        new bootstrap.Modal(document.getElementById('viewTestModal')).show();
+    }
+
+    // Функция копирования
+    function copyToClipboard(elementId) {
+        const copyText = document.getElementById(elementId);
+        copyText.select();
+        document.execCommand("copy"); // Старый метод, но надежный для простых задач
+        // Или navigator.clipboard.writeText(copyText.value);
+    }
+</script>
+
+<style>
+    /* Делаем шапку таблицы липкой */
+    thead.sticky-top th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
+    }
+</style>
+
+{% endblock %}

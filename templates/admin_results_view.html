@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Результаты: {{ olympiad_id }}{% endblock %}
+
+{% block content %}
+<style>
+    .first-to-solve {
+        background-color: #a7d2ac !important; /* Зеленый цвет Bootstrap success */
+        color: rgb(255, 255, 255) !important;
+        position: relative;
+    }
+    /* Делаем текст внутри такой ячейки белым принудительно, чтобы читалось */
+    .first-to-solve .text-success, 
+    .first-to-solve .text-primary, 
+    .first-to-solve .text-muted,
+    .first-to-solve .fw-bold {
+        color: rgb(0, 24, 2) !important;
+    }
+    
+    .first-to-solve::after {
+        content: '★';
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        font-size: 1.2em;
+        color: #ffc107;
+        text-shadow: 1px 1px 2px black;
+        z-index: 10;
+    }
+</style>
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>
+            <span class="text-muted">Результаты:</span> <kbd>{{ olympiad_id }}</kbd>
+            <span class="badge bg-secondary fs-6 ms-2">{{ results.config.scoring|upper }}</span>
+        </h3>
+        <div>
+            <a href="{{ url_for('admin_archive_export', olympiad_id=olympiad_id) }}" class="btn btn-success me-2">
+                <i class="bi bi-download"></i> Скачать Excel
+            </a>
+            <a href="{{ url_for('admin_archive') }}" class="btn btn-outline-secondary">Назад</a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>Участник</th>
+                            <th>Орг.</th>
+                            {% set letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %} 
+                            {% for task in tasks %}
+                                <th class="text-center" title="{{ task[1] }}">{{ letters[loop.index0] }}</th>
+                            {% endfor %}
+                            <th class="text-center">Итого</th>
+                            {% if results.config.scoring == 'icpc' %}<th class="text-center">Штраф</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in participants_list %}
+                        <tr {% if p.disqualified %}class="table-danger"{% endif %}>
+                            <td>{{ loop.index }}</td>
+                            <td>
+                                <strong>{{ p.nickname }}</strong>
+                                {% if p.disqualified %}<span class="badge bg-danger">DQ</span>{% endif %}
+                            </td>
+                            <td><small>{{ p.organization or '-' }}</small></td>
+                            
+                            {% for task in tasks %}
+                                {# [FIX] Получаем ID задачи (обычно это число) #}
+                                {% set tid = task[0] %}
+                                
+                                {# [FIX] Ищем баллы универсально: пробуем и числовой ключ, и строковый #}
+                                {% set s = p.scores.get(tid) or p.scores.get(tid|string) or {} %}
+                                
+                                {# --- ЛОГИКА FIRST TO SOLVE --- #}
+                                {% set is_fts = (results.first_solves and results.first_solves.get(task[0]) == p.participant_uuid) %}
+                                
+                                {# Определяем подсветку #}
+                                {% set highlight_class = "" %}
+                                {% if is_fts %}
+                                    {% if results.config.scoring == 'icpc' and s.get('passed') %}
+                                        {% set highlight_class = "first-to-solve" %}
+                                    {% elif results.config.scoring != 'icpc' and s.get('score', 0) == 100 %}
+                                        {% set highlight_class = "first-to-solve" %}
+                                    {% endif %}
+                                {% endif %}
+
+                                <td class="text-center {{ highlight_class }}">
+                                    {% if results.config.scoring == 'icpc' %}
+                                        {% if s.get('passed') %}
+                                            <span class="text-success fw-bold">+{{ s.get('attempts', 0) if s.get('attempts', 0) > 0 else '' }}</span>
+                                        {% elif s.get('attempts', 0) > 0 %}
+                                            <span class="text-danger">-{{ s.get('attempts', 0) }}</span>
+                                        {% else %}
+                                            <span class="text-muted">.</span>
+                                        {% endif %}
+                                    {% else %}
+                                        {# [FIX] Безопасное получение счета #}
+                                        <span class="fw-bold {% if s.get('score', 0) > 0 %}text-primary{% else %}text-muted{% endif %}">
+                                            {{ s.get('score', 0) }}
+                                        </span>
+                                    {% endif %}
+                                    
+                                    {# Для submissions ключи обычно строки, поэтому приводим к string #}
+                                    {% set code = p.submissions.get(tid|string) %}
+                                    {% if code %}
+                                        <button class="btn btn-link btn-sm p-0 ms-1 text-secondary" 
+                                                onclick="showCode('{{ p.nickname }}', '{{ task[1] }}', `{{ code|escape }}`)">
+                                            <i class="bi bi-code-square"></i>
+                                        </button>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                            
+                            <td class="text-center fw-bold fs-5">
+                                {% if results.config.scoring == 'icpc' %}
+                                    {{ p.solved_count }}
+                                {% else %}
+                                    {{ p.total_score }}
+                                {% endif %}
+                            </td>
+                            {% if results.config.scoring == 'icpc' %}
+                                <td class="text-center text-muted">{{ p.total_penalty }}</td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="codeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Решение: <span id="modalTitle"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <textarea id="modalCodeEditor"></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let codeEditor = null;
+
+    function showCode(nickname, taskName, code) {
+        document.getElementById('modalTitle').textContent = `${nickname} - ${taskName}`;
+        
+        const textArea = document.getElementById('modalCodeEditor');
+        textArea.value = code;
+        
+        const modalEl = document.getElementById('codeModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        
+        // Инициализация CodeMirror при открытии модалки
+        modalEl.addEventListener('shown.bs.modal', function () {
+            if (!codeEditor) {
+                codeEditor = CodeMirror.fromTextArea(textArea, {
+                    mode: "python",
+                    theme: "material-darker",
+                    lineNumbers: true,
+                    readOnly: true
+                });
+            } else {
+                codeEditor.setValue(code);
+            }
+            codeEditor.refresh();
+        }, { once: true }); // once, чтобы не вешать листенеры бесконечно
+        
+        // Костыль для обновления, если уже инициализирован
+        if(codeEditor) {
+             setTimeout(() => {
+                 codeEditor.setValue(code);
+                 codeEditor.refresh();
+             }, 200);
+        }
+    }
+</script>
+{% endblock %}

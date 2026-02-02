@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Олимпиада{% endblock %}
+{% block content %}
+<div class="text-center">
+    <h1 class="display-4">Режим Олимпиады</h1>
+    <p class="lead">Проверьте свои навыки в условиях ограниченного времени.</p>
+    <hr>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-person-badge"></i> Для организатора</h5>
+                    <p class="card-text">Создайте новую олимпиаду, запланируйте старт или посмотрите архив.</p>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('olympiad_create') }}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> Создать олимпиаду
+                        </a>
+                        <a href="{{ url_for('admin_archive') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-archive"></i> Архив результатов
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-people"></i> Для студента</h5>
+                    <p class="card-text">Присоединитесь к соревнованию по ID и никнейму.</p>
+                    <div class="d-grid">
+                        <a href="{{ url_for('olympiad_join') }}" class="btn btn-success">
+                            <i class="bi bi-box-arrow-in-right"></i> Присоединиться
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if session.get('is_admin') and active_olympiads %}
+<hr class="my-5">
+<div class="mt-4">
+    <h2 class="text-center mb-4">Активные и Запланированные</h2>
+    
+    <div class="card shadow">
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                {% for o_id, o_data in active_olympiads.items() %}
+                <div class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between align-items-center mb-2">
+                        <h5 class="mb-1 text-primary">
+                            {{ o_data.get('name', 'Без названия') }} 
+                            <span class="badge bg-secondary ms-2" title="ID Олимпиады">{{ o_id }}</span>
+                        </h5>
+                        
+                        <small>
+                            {% if o_data.status == 'scheduled' %}
+                                <span class="badge bg-info text-dark"><i class="bi bi-clock"></i> Запланирована</span>
+                            {% elif o_data.status == 'running' %}
+                                <span class="badge bg-success"><i class="bi bi-play-circle"></i> Идёт</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Ожидание</span>
+                            {% endif %}
+                        </small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-7">
+                            <p class="mb-1 text-muted">
+                                Участников онлайн: <strong>{{ o_data.participants|length }}</strong>
+                            </p>
+
+                            {% if o_data.status == 'scheduled' %}
+                                <div class="alert alert-light border mt-2 py-2">
+                                    <small class="text-muted d-block mb-1">Авто-старт назначен на:</small>
+                                    <strong><span class="scheduled-time text-primary" data-ts="{{ o_data.start_time }}">Loading...</span></strong>
+                                    
+                                    <form action="{{ url_for('olympiad_edit_time', olympiad_id=o_id) }}" method="POST" class="mt-2 row g-2 align-items-center">
+                                        <div class="col-auto">
+                                            <input type="datetime-local" name="new_time" class="form-control form-control-sm" required>
+                                        </div>
+                                        <div class="col-auto">
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary">Перенести</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-5 d-flex flex-column justify-content-center align-items-end gap-2">
+                            <a href="{{ url_for('olympiad_host', olympiad_id=o_id) }}" class="btn btn-primary w-100">
+                                <i class="bi bi-sliders"></i> Управление / Карточки
+                            </a>
+                            
+                            {% if o_data.status != 'running' %}
+                                <button onclick="forceStart('{{ o_id }}')" class="btn btn-outline-success w-100">
+                                    <i class="bi bi-lightning-fill"></i> Начать сейчас
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. Превращаем timestamp в понятную дату
+    document.addEventListener("DOMContentLoaded", function() {
+        document.querySelectorAll('.scheduled-time').forEach(el => {
+            const ts = parseFloat(el.getAttribute('data-ts'));
+            if(ts) {
+                const date = new Date(ts * 1000);
+                // Формат: 15.01.2026, 14:30:00
+                el.innerText = date.toLocaleString('ru-RU', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                });
+            }
+        });
+    });
+
+    // 2. Логика кнопки "Начать сейчас"
+    function forceStart(oid) {
+        if(confirm('Вы уверены, что хотите запустить олимпиаду прямо сейчас, игнорируя таймер?')) {
+            fetch(`/olympiad/start/${oid}`, {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    if(data.status === 'ok') {
+                        window.location.reload();
+                    } else {
+                        alert('Ошибка запуска');
+                    }
+                })
+                .catch(err => alert('Ошибка соединения: ' + err));
+        }
+    }
+</script>
+{% endif %}
+{% endblock %}

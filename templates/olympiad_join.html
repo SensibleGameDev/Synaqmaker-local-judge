@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-lg border-0 mt-5">
+            <div class="card-header bg-dark text-white text-center">
+                <h3>Вход в олимпиаду</h3>
+            </div>
+            <div class="card-body p-4">
+                
+                <ul class="nav nav-tabs nav-fill mb-4" id="joinTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold" id="participant-tab" data-bs-toggle="tab" data-bs-target="#participant" type="button" role="tab">
+                            <i class="bi bi-person-badge"></i> Я участник
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold text-info" id="spectator-tab" data-bs-toggle="tab" data-bs-target="#spectator" type="button" role="tab">
+                            <i class="bi bi-eye"></i> Я зритель
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="joinTabsContent">
+                    <div class="tab-pane fade show active" id="participant" role="tabpanel">
+                        <form method="POST" action="{{ url_for('olympiad_join') }}">
+                            <div class="mb-3">
+                                <label class="form-label">Никнейм</label>
+                                <input type="text" name="nickname" class="form-control form-control-lg" placeholder="Ваше имя" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">ID Олимпиады</label>
+                                <input type="text" name="olympiad_id" class="form-control form-control-lg" placeholder="Например: a1b2c3d4" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Пароль (если есть)</label>
+                                <input type="password" name="password" class="form-control" placeholder="Только для закрытых олимпиад">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 btn-lg">Войти</button>
+                        </form>
+                    </div>
+
+                    <div class="tab-pane fade" id="spectator" role="tabpanel">
+                        <div class="text-center mb-3">
+                            <p class="text-muted">Введите ID олимпиады, чтобы наблюдать за таблицей результатов в реальном времени.</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">ID Олимпиады</label>
+                            <input type="text" id="spectateIdInput" class="form-control form-control-lg text-center" placeholder="ID">
+                        </div>
+                        <button onclick="goToSpectate()" class="btn btn-info w-100 btn-lg text-white">
+                            <i class="bi bi-tv"></i> Смотреть
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function goToSpectate() {
+        const id = document.getElementById('spectateIdInput').value.trim();
+        if (id) {
+            window.location.href = "/spectate/" + id;
+        } else {
+            alert("Пожалуйста, введите ID олимпиады");
+        }
+    }
+</script>
+{% endblock %}

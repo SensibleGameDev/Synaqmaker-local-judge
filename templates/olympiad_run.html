@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+{% block title %}Идёт олимпиада!{% endblock %}
+
+{% block content %}
+{% set letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
+
+<div class="card shadow-sm mb-4" style="z-index: 1020;">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-3 border-end">
+                <h4 class="mb-0">Таймер: <span id="timer" class="badge bg-secondary">00:00:00</span></h4>
+            </div>
+            
+            <div class="col-md-7 ps-4">
+                <div class="d-flex align-items-center mb-2">
+                    <h5 class="mb-0 me-3">Участник: <strong>{{ session.get('nickname') }}</strong></h5>
+                    {% if oly_session.config.scoring == 'icpc' %}
+                        <span id="icpc-total-score" class="badge bg-light text-dark border">Решено: 0 | Штраф: 0</span>
+                    {% endif %}
+                </div>
+                
+                <div id="scoreboard" class="d-flex flex-wrap gap-3">
+                    {% for task in oly_session.tasks_details %}
+                    <div class="text-center p-1 rounded border bg-light" style="min-width: 60px;">
+                        <div class="small text-muted">Задача {{ letters[loop.index0] }}</div>
+                        <div id="score-block-{{ task[0] }}" class="fw-bold">
+                            {% if oly_session.config.scoring == 'icpc' %}
+                                <span class="text-secondary">-</span>
+                            {% else %}
+                                0
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="col-md-2 text-end">
+                <button class="btn btn-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#scoreboardModal" onclick="loadScoreboard()">
+                    <i class="bi bi-trophy-fill"></i> Таблица
+                </button>
+                <form action="{{ url_for('olympiad_finish_early', olympiad_id=olympiad_id) }}" method="POST">
+                    <button type="submit" class="btn btn-outline-danger btn-sm w-100" onclick="return confirm('Завершить олимпиаду?');">
+                        Завершить
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs" id="taskTabs" role="tablist">
+    {% for task in oly_session.tasks_details %}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if loop.first %}active{% endif %}" id="tab-btn-{{ task[0] }}" data-bs-toggle="tab" data-bs-target="#task-pane-{{ task[0] }}" type="button" role="tab">Задача {{ letters[loop.index0] }}</button>
+    </li>
+    {% endfor %}
+</ul>
+
+<div class="tab-content" id="taskTabsContent">
+    {% for task in oly_session.tasks_details %}
+    <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="task-pane-{{ task[0] }}" role="tabpanel">
+        <div class="row mt-3">
+            <div class="col-lg-7 col-md-6" style="max-height: 85vh; overflow-y: auto;">
+                
+                <div class="d-flex justify-content-between align-items-start mb-3 border-bottom pb-2">
+                    <h3 class="text-break" style="line-height: 1.2;">{{ letters[loop.index0] }}. {{ task[1] }}</h3>
+                    
+                    {% if task[5] %}
+                    <div class="flex-shrink-0 ms-3">
+                        <a href="{{ url_for('display_attachment', task_id=task[0]) }}" target="_blank" class="btn btn-sm btn-outline-primary text-nowrap">
+                            <i class="bi bi-file-pdf"></i> PDF
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="markdown-content pe-2">{{ task[4] }}</div>
+            </div>
+
+            <div class="col-lg-5 col-md-6 d-flex flex-column" style="min-height: 80vh;">
+                <div class="flex-grow-1 d-flex flex-column">
+                    <form class="submission-form h-100 d-flex flex-column" data-task-id="{{ task[0] }}" data-task-letter="{{ letters[loop.index0] }}">
+                        <div class="d-flex justify-content-between align-items-center mb-2 bg-light p-2 rounded">
+                            <label class="form-label mb-0 fw-bold small text-uppercase text-muted">Редактор кода</label>
+                            <select id="language-{{ task[0] }}" name="language" class="form-select form-select-sm w-auto border-0 bg-transparent fw-bold text-primary" style="cursor: pointer;">
+                                <option value="Python" selected>Python 3.11</option>
+                                <option value="C++">C++ 17 (G++)</option>
+                                <option value="C#">C# Mono</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex-grow-1 border rounded overflow-hidden mb-2 shadow-sm">
+                            <textarea id="code-{{ task[0] }}" name="code" class="form-control h-100"></textarea>
+                        </div>
+
+                        <div class="status-alert-box mb-2" id="alert-box-{{ task[0] }}" style="display: none;"></div>
+
+                        <button type="submit" id="submit-btn-{{ task[0] }}" class="btn btn-success w-100 py-2 fw-bold shadow-sm">
+                            <i class="bi bi-play-fill"></i> Отправить решение
+                        </button>
+                    </form>
+                </div>
+
+                <div class="mt-3 border rounded p-2 bg-white shadow-sm" style="height: 220px; min-height: 220px; overflow-y: auto;">
+                    <h6 class="text-muted border-bottom pb-1 mb-2 small text-uppercase fw-bold">
+                        <i class="bi bi-clock-history"></i> История посылок
+                    </h6>
+                    <table class="table table-sm table-hover text-center align-middle" style="font-size: 0.8rem;">
+                        <thead class="table-light sticky-top" style="top: -8px;">
+                            <tr>
+                                <th>Время</th>
+                                <th>Задача</th>
+                                <th>Язык</th>
+                                <th>Вердикт</th>
+                                <th>Тесты</th>
+                            </tr>
+                        </thead>
+                        <tbody class="history-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="modal fade" id="scoreboardModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-trophy"></i> Таблица результатов</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="scoreboard-loader" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped text-center table-sm" id="full-scoreboard-table">
+            </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
+    const olympiadId = "{{ olympiad_id }}";
+    const myNickname = "{{ session.get('nickname') }}";
+    const scoringMode = "{{ oly_session.config.scoring }}";
+    const participantId = "{{ participant_id }}";
+    
+    // Подключение Socket.IO (одно соединение на всю страницу)
+    const socket = io();
+
+    // --- ФУНКЦИЯ 1: Обработка результата проверки (Async) ---
+    function handleSubmissionResult(data) {
+        // data = { task_id, passed, new_score, verdict, details ... }
+        
+        const taskId = data.task_id;
+        const alertBox = document.getElementById(`alert-box-${taskId}`);
+        const btn = document.getElementById(`submit-btn-${taskId}`);
+        
+        // 1. Возвращаем кнопку в активное состояние
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-play-fill"></i> Отправить решение';
+        }
+
+        // 2. Формируем красивый алерт
+        let alertClass = 'alert-danger';
+        let alertText = 'Ошибка';
+
+        if (data.passed) {
+            alertClass = 'alert-success';
+            alertText = `<strong>Accepted!</strong> Решение принято.`;
+        } else if (data.verdict === "CE") {
+            alertClass = 'alert-dark text-white';
+            alertText = `<strong>Compilation Error</strong>`;
+        } else {
+            // Ищем первый упавший тест в details
+            let failText = data.verdict; // WA/RE/TL
+            if (data.details) {
+                const fail = data.details.find(d => d.verdict !== 'Accepted');
+                if (fail) failText = `${fail.verdict} на тесте ${fail.test_num}`;
+            }
+            alertText = `<strong>${failText}</strong>`;
+        }
+
+        if (alertBox) {
+            alertBox.innerHTML = alertText;
+            // Bootstrap цвета: bg-success + bg-opacity-25 выглядит приятнее чем яркий alert-success
+            let bgClass = alertClass.replace('alert-', 'bg-');
+            if (bgClass !== 'bg-dark') bgClass += ' bg-opacity-25';
+            
+            alertBox.className = `status-alert-box mb-2 p-3 rounded border border-${alertClass.replace('alert-', '')} ${bgClass}`;
+            if (data.verdict === "CE") alertBox.classList.add('text-white');
+            alertBox.style.display = 'block';
+        }
+
+        // 3. [ИСПРАВЛЕНИЕ] Удаляем фейковые строки "В очереди" перед обновлением
+        const pendingRows = document.querySelectorAll('.pending-row');
+        pendingRows.forEach(row => row.remove());
+
+        // 4. Загружаем настоящую историю из базы
+        loadHistory();
+    }
+
+    // Слушаем ЛИЧНЫЕ результаты из очереди
+    socket.on('personal_result', function(msg) {
+        if (msg.participant_id === participantId) {
+            handleSubmissionResult(msg.data);
+        }
+    });
+
+    // --- ФУНКЦИЯ 2: Загрузка истории ---
+    async function loadHistory() {
+        try {
+            const res = await fetch(`/olympiad/api/history/${olympiadId}`);
+            if (!res.ok) {
+                console.error("History fetch failed:", res.status);
+                return;
+            }
+            const data = await res.json();
+            
+            const tables = document.querySelectorAll('.history-body');
+            tables.forEach(tbody => {
+                // [FIX] Не трогаем pending-row, просто дополняем историю
+                const currentRows = tbody.querySelectorAll('tr:not(.pending-row)');
+                
+                // Удаляем только старые загруженные строки (но не pending)
+                currentRows.forEach(r => r.remove());
+                
+                data.forEach(row => {
+                    let badgeClass = 'bg-secondary';
+                    let verdictText = row.verdict;
+
+                    if (row.verdict === 'Accepted' || row.verdict === 'OK') badgeClass = 'bg-success';
+                    else if (row.verdict === 'Time Limit Exceeded') { badgeClass = 'bg-warning text-dark'; verdictText = 'TLE'; }
+                    else if (row.verdict && row.verdict.includes('Compilation')) { badgeClass = 'bg-dark'; verdictText = 'CE'; }
+                    else if (row.verdict === 'Runtime Error') { badgeClass = 'bg-danger'; verdictText = 'RE'; }
+                    else badgeClass = 'bg-danger'; // WA
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="text-muted">${row.time}</td>
+                        <td class="fw-bold">${row.letter}</td>
+                        <td>${row.language}</td>
+                        <td><span class="badge ${badgeClass}">${verdictText}</span></td>
+                        <td>${row.tests}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+
+        } catch (e) {
+            console.error("History load error:", e);
+        }
+    }
+
+    // --- ФУНКЦИЯ 3: Таблица (Scoreboard) ---
+    async function loadScoreboard() {
+        const modalTable = document.getElementById('full-scoreboard-table');
+        const loader = document.getElementById('scoreboard-loader');
+        if (!modalTable || !loader) return;
+
+        modalTable.innerHTML = '';
+        modalTable.classList.add('d-none');
+        loader.classList.remove('d-none');
+        
+        try {
+            const res = await fetch(`/olympiad/api/scoreboard/${olympiadId}`);
+            const data = await res.json();
+            const isICPC = data.config.scoring === 'icpc';
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            
+            let headerHtml = '<thead class="table-dark"><tr><th>#</th><th>Участник</th>';
+            let taskCount = 0;
+            if (data.config.task_ids) taskCount = data.config.task_ids.length;
+            else if (data.scoreboard.length) taskCount = Object.keys(data.scoreboard[0].scores).length;
+
+            for(let i=0; i<taskCount; i++) headerHtml += `<th>${letters[i] || (i+1)}</th>`;
+            headerHtml += `<th>Итого</th></tr></thead><tbody>`;
+            
+            data.scoreboard.forEach((p, index) => {
+                let rankDisplay = index + 1;
+                let rowClass = '';
+                if (index === 0) { rankDisplay = '🥇 1'; rowClass = 'table-warning'; }
+                else if (index === 1) { rankDisplay = '🥈 2'; rowClass = 'table-secondary'; }
+                else if (index === 2) { rankDisplay = '🥉 3'; }
+
+                let rowHtml = `<tr class="${rowClass}">
+                    <td class="fw-bold">${rankDisplay}</td>
+                    <td class="text-start fw-bold">${p.nickname} ${p.organization ? `<br><small class="text-muted">${p.organization}</small>` : ''}</td>`;
+                
+                const taskIds = data.config.task_ids || Object.keys(p.scores);
+                taskIds.forEach(tid => {
+                    let s = p.scores[tid] || {score:0, passed:false, attempts:0, penalty:0};
+                    let cellContent = '.';
+                    let cellClass = '';
+                    
+                    if (isICPC) {
+                         if (s.passed) {
+                             cellContent = `<span class="text-success fw-bold">+${s.attempts > 0 ? s.attempts : ''}</span><br><small class="text-muted">${s.penalty}</small>`;
+                             cellClass = 'table-success';
+                         } else if (s.attempts > 0) cellContent = `<span class="text-danger">-${s.attempts}</span>`;
+                    } else {
+                        cellContent = s.score;
+                        if (s.passed) cellClass = 'table-success fw-bold';
+                        else if (s.score > 0) cellClass = 'table-warning';
+                    }
+                    rowHtml += `<td class="${cellClass}">${cellContent}</td>`;
+                });
+                
+                rowHtml += `<td class="fw-bold">${p.total_score} ${isICPC ? `<span class="text-muted small">(${p.total_penalty})</span>` : ''}</td></tr>`;
+                headerHtml += rowHtml;
+            });
+            headerHtml += '</tbody>';
+            modalTable.innerHTML = headerHtml;
+        } catch (e) {
+            modalTable.innerHTML = `<tr><td class="text-danger">Ошибка: ${e.message}</td></tr>`;
+        } finally {
+            loader.classList.add('d-none');
+            modalTable.classList.remove('d-none');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const timerEl = document.getElementById('timer');
+        loadHistory();
+
+        // Таймер
+        let countdownInterval = null;
+        function startServerTimer(secondsLeft) {
+            if (countdownInterval) clearInterval(countdownInterval);
+            let timeLeft = Math.floor(secondsLeft);
+            const draw = () => {
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    timerEl.textContent = "00:00:00";
+                    timerEl.className = 'badge bg-danger';
+                    return;
+                }
+                const h = Math.floor(timeLeft / 3600).toString().padStart(2, '0');
+                const m = Math.floor((timeLeft % 3600) / 60).toString().padStart(2, '0');
+                const s = Math.floor(timeLeft % 60).toString().padStart(2, '0');
+                timerEl.textContent = `${h}:${m}:${s}`;
+                timeLeft < 300 ? timerEl.className = 'badge bg-warning text-dark' : timerEl.className = 'badge bg-secondary';
+                timeLeft--;
+            };
+            draw();
+            countdownInterval = setInterval(draw, 1000);
+        }
+
+        // Socket: Обновление статуса (Таймер + Scoreboard)
+        socket.on('connect', () => socket.emit('join_room', { room: olympiadId }));
+        socket.on('full_status_update', (data) => {
+            if (data.status === 'running') startServerTimer(data.remaining_seconds);
+            else timerEl.textContent = "Завершено";
+
+            const me = data.scoreboard.find(p => p.participant_id === participantId);
+            if (!me) return;
+
+            // Обновляем Header (Решено/Штраф)
+            if (scoringMode === 'icpc') {
+                const totalScoreEl = document.getElementById('icpc-total-score');
+                if (totalScoreEl) totalScoreEl.innerHTML = `Решено: <strong>${me.total_score}</strong> | Штраф: <strong>${me.total_penalty}</strong>`;
+            }
+            // Обновляем мини-блоки задач
+            for (const taskId in me.scores) {
+                const s = me.scores[taskId];
+                const el = document.getElementById(`score-block-${taskId}`);
+                if (el) {
+                    if (scoringMode === 'icpc') {
+                        if (s.passed) el.innerHTML = `<span class="text-success">+${s.attempts > 0 ? s.attempts : ''}</span>`;
+                        else if (s.attempts > 0) el.innerHTML = `<span class="text-danger">-${s.attempts}</span>`;
+                        else el.innerHTML = `<span class="text-secondary">-</span>`;
+                    } else {
+                        el.innerHTML = s.score;
+                        if (s.passed) el.className = 'fw-bold text-success';
+                    }
+                }
+            }
+        });
+        socket.on('olympiad_finished', () => window.location.href = `{{ url_for('olympiad_end', olympiad_id=olympiad_id) }}`);
+
+        // Инициализация редакторов
+        const editors = {};
+        document.querySelectorAll('.submission-form').forEach(form => {
+            const taskId = form.dataset.taskId;
+            const taskLetter = form.dataset.taskLetter;
+            const textArea = document.getElementById(`code-${taskId}`);
+            const alertBox = document.getElementById(`alert-box-${taskId}`);
+            const submitBtn = document.getElementById(`submit-btn-${taskId}`);
+            
+            const editor = CodeMirror.fromTextArea(textArea, {
+                lineNumbers: true, mode: 'python', theme: 'material-darker', matchBrackets: true, indentUnit: 4
+            });
+            editor.setSize("100%", "100%");
+            setTimeout(() => editor.refresh(), 100);
+            editors[taskId] = editor;
+
+            document.getElementById(`language-${taskId}`).addEventListener('change', (e) => {
+                const lang = e.target.value;
+                if (lang === 'C++') {
+                    editor.setOption('mode', 'text/x-c++src');
+                } else if (lang === 'C#') {
+                    editor.setOption('mode', 'text/x-csharp'); // Использует clike.min.js
+                } else {
+                    editor.setOption('mode', 'python');
+                }
+            });
+
+            // ОТПРАВКА (ASYNC)
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const code = editors[taskId].getValue();
+                
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Pending...';
+                
+                // Скрываем старый алерт
+                alertBox.style.display = 'none';
+
+                // Добавляем "фейковую" строку в таблицу, чтобы было видно, что процесс идет
+                const historyTables = document.querySelectorAll('.history-body');
+                const now = new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                const loadingRow = document.createElement('tr');
+                loadingRow.className = 'table-warning pending-row'; // Класс pending-row важен для loadHistory
+                loadingRow.innerHTML = `
+                    <td class="text-muted">${now}</td>
+                    <td class="fw-bold">${taskLetter}</td>
+                    <td>${form.language.value}</td>
+                    <td class="fw-bold text-primary"><span class="spinner-grow spinner-grow-sm"></span> Pending...</td>
+                    <td>...</td>
+                `;
+                historyTables.forEach(t => t.prepend(loadingRow.cloneNode(true)));
+
+                try {
+                    const res = await fetch("{{ url_for('olympiad_submit', olympiad_id=olympiad_id) }}", {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ task_id: taskId, language: form.language.value, code: code })
+                    });
+                    const data = await res.json();
+                    
+                    if (!res.ok) throw new Error(data.error || 'Ошибка');
+
+                    // Если успешно (status: queued)
+                    if (data.status === 'queued') {
+                        // Обновляем текст на кнопке
+                        submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Позиция: ${data.queue_size}`;
+                        // Дальше ждем события из сокета (handleSubmissionResult)
+                    } 
+
+                } catch (error) {
+                    alertBox.innerHTML = `Ошибка: ${error.message}`;
+                    alertBox.className = 'alert alert-danger';
+                    alertBox.style.display = 'block';
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-play-fill"></i> Отправить решение';
+                    loadHistory(); // Убрать фейковую строку
+                }
+            });
+        });
+
+        // Refresh editor layout when tab changes
+        document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tabBtn => {
+            tabBtn.addEventListener('shown.bs.tab', () => {
+                // 1. Обновляем CodeMirror (чтобы не был серым)
+                for (let tid in editors) editors[tid].refresh();
+
+                // 2. Обновляем MathJax (чтобы формулы появились)
+                if (window.MathJax) {
+                    // Используем typesetPromise, это безопаснее для динамики
+                    MathJax.typesetPromise();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

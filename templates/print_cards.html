@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Карточки участников</title>
+    <style>
+        body { font-family: sans-serif; }
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* 2 карточки в ряд */
+            gap: 20px;
+            padding: 20px;
+        }
+        .participant-card {
+            border: 2px dashed #000;
+            padding: 20px;
+            page-break-inside: avoid;
+        }
+        .header { font-weight: bold; font-size: 1.2em; border-bottom: 1px solid #ccc; margin-bottom: 10px; }
+        .info-row { margin: 5px 0; font-size: 1.1em; }
+        .label { font-weight: bold; }
+        .val { font-family: monospace; font-size: 1.2em; background: #eee; padding: 2px 5px; }
+        @media print {
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="padding: 20px; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; gap: 10px; align-items: center;">
+        <button onclick="window.print()" style="font-size: 18px; padding: 10px 20px; cursor: pointer;">🖨️ Распечатать / PDF</button>
+        
+        <button onclick="window.close()" style="font-size: 18px; padding: 10px 20px; cursor: pointer;">❌ Закрыть вкладку</button>
+    </div>
+
+    <h2 style="text-align: center;">{{ olympiad_name }} (ID: {{ olympiad_id }})</h2>
+
+    <div class="card-container">
+        {% for p in whitelist %}
+        <div class="participant-card">
+            <div class="header">Участник олимпиады</div>
+            <div class="info-row"><span class="label">Олимпиада ID:</span> {{ olympiad_id }}</div>
+            <div class="info-row"><span class="label">Организация:</span> {{ p[2] }}</div>
+            <hr>
+            <div class="info-row"><span class="label">Никнейм:</span> <span class="val">{{ p[1] }}</span></div>
+            <div class="info-row"><span class="label">Пароль:</span> <span class="val">{{ p[3] }}</span></div>
+            <hr>
+            <div class="info-row" style="font-size: 0.9em; color: #555;">
+                <i>Пожалуйста, не сообщайте пароль другим участникам.</i>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

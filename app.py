@@ -1736,6 +1736,10 @@ def restore_state_on_startup():
                 config = json.loads(row['config_json'])
                 task_ids = json.loads(row['task_ids_json'])
                 
+                # Ensure allowed_languages has a default value for backward compatibility
+                if 'allowed_languages' not in config:
+                    config['allowed_languages'] = ['Python', 'C++', 'C#']
+                
                 olympiads[oid] = {
                     'status': 'scheduled', # Новый статус
                     'name': row['name'], # Название для удобства

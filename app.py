@@ -668,7 +668,7 @@ def olympiad_submit(olympiad_id):
         if olympiad_id not in olympiads or not participant_id:
             return jsonify({'error': 'Олимпиада не активна или вы не авторизованы.'}), 403
 
-        oly = olympiads[олимпиад_id]
+        oly = olympiads[olympiad_id]
         if participant_id not in oly['participants']:
             return jsonify({'error': 'Участник не найден.'}), 403
 
@@ -773,25 +773,25 @@ def olympiad_create():
                 db.save_olympiad_config(olympiad_id, tasks_ordered, name=name, duration=duration, scoring=scoring)
                 
                 if status == 'scheduled':
-                    db.add_scheduled_олимпиада(олимпиада_id, name, start_timestamp, config_dict, tasks_ordered)
+                    db.add_scheduled_olympiad(olympiad_id, name, start_timestamp, config_dict, tasks_ordered)
             except Exception as e:
                 print(f"DB Error saving config: {e}")
 
-        flash(f'Олимпиада создана! ID: {олимпиада_id}', 'success')
-        return redirect(url_for('olympiad_host', olympiad_id=олимпиада_id))
+        flash(f'Олимпиада создана! ID: {olympiad_id}', 'success')
+        return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
 
     tasks = db.get_tasks()
     return render_template('olympiad_create.html', tasks=tasks)
 
 @app.route('/olympiad/mode/<olympiad_id>')
-def get_olympiad_mode(олимпиада_id):
+def get_olympiad_mode(olympiad_id):
     """API: Возвращает режим олимпиады (free/closed) для UI."""
 
     with olympiad_lock:
-        if олимпиада_id not in olympiads:
+        if olympiad_id not in olympiads:
             return jsonify({'error': 'not found'}), 404
         
-        mode = olympiads[олимпиада_id].get('config', {}).get('mode', 'free')
+        mode = olympiads[olympiad_id].get('config', {}).get('mode', 'free')
     
     return jsonify({'mode': mode})
 
@@ -799,22 +799,22 @@ def get_olympiad_mode(олимпиада_id):
 def olympiad_join():
     if request.method == 'POST':
         nickname = request.form.get('nickname', '').strip()
-        олимпиада_id = request.form.get('olympiad_id', '').strip()
+        olympiad_id = request.form.get('olympiad_id', '').strip()
         password = request.form.get('password', '').strip()
         organization = request.form.get('organization', '').strip() 
 
-        if not nickname or not олимпиада_id:
+        if not nickname or not olympiad_id:
             flash('Нужно ввести и никнейм, и ID олимпиады.', 'warning')
-            return redirect(url_for('олимпиада_join'))
+            return redirect(url_for('olympiad_join'))
         
         oly_data_copy = None 
 
         with olympiad_lock:
-            if олимпиада_id not in olympiads:
+            if olympiad_id not in olympiads:
                 flash('Олимпиада с таким ID не найдена.', 'danger')
-                return redirect(url_for('олимпиада_join'))
+                return redirect(url_for('olympiad_join'))
 
-            oly = olympиads[олимпиада_id]
+            oly = olympiads[olympiad_id]
             oly_data_copy = {
                 'config': oly['config'],
                 'status': oly['status'],
@@ -839,14 +839,14 @@ def olympiad_join():
                          
                     if p_data.get('finished_early'):
                         flash('Вы уже завершили эту олимпиаду и не можете переподключиться.', 'warning')
-                        return redirect(url_for('олимпиада_end', олимпиада_id=олимпиада_id))
+                        return redirect(url_for('olympiad_end', olympiad_id=olympiad_id))
                     # [FIX] УДАЛЕНА БЛОКИРОВКА ДИСКВАЛИФИЦИРОВАННЫХ - они должны видеть свои результаты
                     break
             
             # 2. [FIX] Если в памяти нет, ищем в БД (чтобы восстановить баллы после перезагрузки)
             if not existing_participant_id:
                 try:
-                    existing_participant_id = db.get_participant_uuid_by_nickname(олимпиада_id, nickname)
+                    existing_participant_id = db.get_participant_uuid_by_nickname(olympiad_id, nickname)
                     if existing_participant_id:
                         print(f"INFO: Участник {nickname} найден в базе (восстановление сессии).")
                 except Exception as e:
@@ -860,13 +860,13 @@ def olympiad_join():
         else: # Closed mode
             if not password:
                 flash('Это закрытая олимпиада. Необходимо ввести пароль.', 'warning')
-                return redirect(url_for('олимпиада_join'))
+                return redirect(url_for('olympiad_join'))
 
-            participant_data = db.validate_closed_participant(олимпиада_id, nickname, password)
+            participant_data = db.validate_closed_participant(olympiad_id, nickname, password)
             
             if not participant_data:
                 flash('Неверный никнейм или пароль для этой олимпиады.', 'danger')
-                return redirect(url_for('олимпиада_join'))
+                return redirect(url_for('olympiad_join'))
                 
             participant_db_id = str(participant_data['id']) 
             # В закрытом режиме организация берется строго из белого списка
@@ -874,13 +874,13 @@ def olympiad_join():
 
             if participant_db_id in oly_data_copy['participants'] and oly_data_copy['participants'][participant_db_id].get('finished_early'):
                 flash('Вы уже завершили эту олимпиаду и не можете переподключиться.', 'warning')
-                return redirect(url_for('олимпиада_end', олимпиада_id=олимпиада_id))
+                return redirect(url_for('olympiad_end', olympiad_id=olympiad_id))
             
             participant_id_to_set = participant_db_id
 
         session['participant_id'] = participant_id_to_set
         session['nickname'] = nickname
-        session['olympiad_id'] = олимпиада_id
+        session['olympiad_id'] = olympiad_id
         
         # [FIX] Обязательно сохраняем организацию в сессию, 
         # чтобы handle_join_room мог её подхватить
@@ -888,26 +888,26 @@ def olympiad_join():
             session['organization'] = participant_org
         
         if oly_data_copy.get('status') == 'running':
-            return redirect(url_for('олимпиада_run', олимпиада_id=олимпиада_id))
+            return redirect(url_for('olympiad_run', olympiad_id=olympiad_id))
         else:
-            return redirect(url_for('олимпиада_lobby', олимпиада_id=олимпиада_id))
+            return redirect(url_for('olympiad_lobby', olympiad_id=olympiad_id))
 
-    return render_template('олимпиада_join.html')
+    return render_template('olympiad_join.html')
 
-@app.route('/олимпиада/lobby/<олимпиада_id>')
-def olympiad_lobby(олимпиада_id):
+@app.route('/olympiad/lobby/<olympiad_id>')
+def olympiad_lobby(olympiad_id):
     nickname = session.get('nickname')
-    if not nickname or session.get('олимпиада_id') != олимпиада_id:
-        return redirect(url_for('олимпиада_join'))
-    return render_template('олимпиада_lobby.html', олимпиада_id=олимпиада_id, nickname=nickname)
+    if not nickname or session.get('olympiad_id') != olympiad_id:
+        return redirect(url_for('olympiad_join'))
+    return render_template('olympiad_lobby.html', olympiad_id=olympiad_id, nickname=nickname)
 
-@app.route('/олимпиада/host/<олимпиада_id>')
+@app.route('/olympiad/host/<olympiad_id>')
 @admin_required
-def olympiad_host(олимпиада_id):
+def olympiad_host(olympiad_id):
 
     session.pop('participant_id', None)
     session.pop('nickname', None)
-    session.pop('олимпиада_id', None)
+    session.pop('olympiad_id', None)
     session.pop('organization', None)
 
     oly_data_copy = None
@@ -915,81 +915,81 @@ def olympiad_host(олимпиада_id):
     tasks_details = []
     
     with olympiad_lock:
-        if олимпиада_id not in olympiads:
+        if olympiad_id not in olympiads:
             return "Олимпиада не найдена", 404
         
-        session[f'is_organizer_for_{олимпиада_id}'] = True
+        session[f'is_organizer_for_{olympiad_id}'] = True
         
-        oly_data = olympiads[олимпиада_id]
+        oly_data = olympiads[olympiad_id]
         oly_mode = oly_data['config'].get('mode', 'free')
         tasks_details = oly_data['tasks_details']
         oly_data_copy = oly_data.copy()
         if 'first_solves' not in oly_data_copy:
-             oly_data_copy['first_solves'] = db.get_first_solvers(олимпиада_id)
+             oly_data_copy['first_solves'] = db.get_first_solvers(olympiad_id)
         
     whitelist = []
     
     if oly_mode == 'closed':
-        whitelist = db.get_whitelist_for_олимпиада(олимпиада_id)
+        whitelist = db.get_whitelist_for_olympiad(olympiad_id)
         
-    return render_template('олимпиада_host.html', 
-                           олимпиада_id=олимпиада_id, 
+    return render_template('olympiad_host.html', 
+                           olympiad_id=olympiad_id, 
                            tasks=tasks_details,
                            oly_mode=oly_mode,
                            whitelist=whitelist,
                            olympiad_data=oly_data_copy)
 
-@app.route('/олимпиада/start/<олимпиада_id>', methods=['POST'])
+@app.route('/olympiad/start/<olympiad_id>', methods=['POST'])
 @admin_required
-def olympiad_start(олимпиада_id):
+def olympiad_start(olympiad_id):
 
     with olympiad_lock:
-        if олимпиада_id in olympiads:
+        if olympiad_id in olympiads:
             current_time = time.time()
             # 1. Обновляем в оперативной памяти (для мгновенной работы)
-            olympiads[олимпиада_id]['status'] = 'running'
-            olympiads[олимпиада_id]['start_time'] = current_time 
+            olympiads[olympiad_id]['status'] = 'running'
+            olympiads[olympiad_id]['start_time'] = current_time 
             
             # 2. Сохраняем в БД (на случай перезагрузки)
-            db.set_олимпиада_start_time(олимпиада_id, current_time)
+            db.set_olympiad_start_time(olympiad_id, current_time)
           
-            socketio.emit('олимпиада_started', {'status': 'ok'}, to=олимпиада_id)
+            socketio.emit('olympiad_started', {'status': 'ok'}, to=olympiad_id)
             
             return jsonify({'status': 'ok'})
     return jsonify({'status': 'error'}), 404
 
-@app.route('/олимпиада/run/<олимпиада_id>')
-def olympiad_run(олимпиада_id):
+@app.route('/olympiad/run/<olympiad_id>')
+def olympiad_run(olympiad_id):
     
     oly_data_copy = None
     with olympiad_lock:
         
-        if session.get('олимпиада_id') != олимпиада_id:
+        if session.get('olympiad_id') != olympiad_id:
             
             flash('Вы вошли в другую олимпиаду. Войдите заново.', 'warning')
             session.pop('participant_id', None)
             session.pop('nickname', None)
-            session.pop('олимпиада_id', None)
+            session.pop('olympiad_id', None)
             session.pop('organization', None)
-            return redirect(url_for('олимпиада_join'))
+            return redirect(url_for('olympiad_join'))
     
     with olympiad_lock:
-        if олимпиада_id not in olympiads or 'nickname' not in session:
-            return redirect(url_for('олимпиада_join'))
+        if olympiad_id not in olympiads or 'nickname' not in session:
+            return redirect(url_for('olympiad_join'))
         
-        oly = olympiads[олимпиада_id]
+        oly = olympiads[olympiad_id]
         participant_id = session.get('participant_id') 
         participant_data = oly['participants'].get(participant_id, {})
         
         
         if participant_data.get('finished_early'):
             flash('Вы уже завершили эту олимпиаду.', 'info')
-            return redirect(url_for('олимпиада_end', олимпиада_id=олимпиада_id))
+            return redirect(url_for('olympiad_end', olympiad_id=olympiad_id))
         if participant_data.get('disqualified'):
             flash('Вы были дисквалифицированы.', 'danger')
-            return redirect(url_for('олимпиада_end', олимпиада_id=олимпиада_id))
+            return redirect(url_for('olympiad_end', olympiad_id=olympiad_id))
         if oly['status'] != 'running':
-            return redirect(url_for('олимпиада_lobby', олимпиада_id=олимпиада_id))
+            return redirect(url_for('olympiad_lobby', olympiad_id=olympiad_id))
 
         if participant_id and participant_id not in oly['participants']:
             
@@ -1016,41 +1016,41 @@ def olympiad_run(олимпиада_id):
         
         oly_data_copy = oly.copy()
         
-    return render_template('олимпиада_run.html', 
-                           олимпиада_id=олимпиада_id, 
+    return render_template('olympiad_run.html', 
+                           olympiad_id=olympiad_id, 
                            oly_session=oly_data_copy, 
                            participant_id=participant_id)
 
-@app.route('/олимпиада/finish_early/<олимпиада_id>', methods=['POST'])
-def olympiad_finish_early(олимпиада_id):
+@app.route('/olympiad/finish_early/<olympiad_id>', methods=['POST'])
+def olympiad_finish_early(olympiad_id):
 
     with olympiad_lock:
-        if олимпиада_id not in olympiads or 'participant_id' not in session:
-            return redirect(url_for('олимпиада_join'))
+        if olympiad_id not in olympiads or 'participant_id' not in session:
+            return redirect(url_for('olympiad_join'))
         
         participant_id = session['participant_id']
-        oly = olympiads[олимпиада_id]
+        oly = olympiads[olympiad_id]
 
         if participant_id in oly['participants']:
             oly['participants'][participant_id]['finished_early'] = True
             oly['is_dirty'] = True
             flash('Вы успешно завершили олимпиаду.', 'success')
     
-    current_state = _get_олимпиада_state(олимпиада_id)
+    current_state = _get_olympiad_state(olympiad_id)
     if current_state:
-        socketio.emit('full_status_update', current_state, to=олимпиада_id)
+        socketio.emit('full_status_update', current_state, to=olympiad_id)
 
     
-    return redirect(url_for('олимпиада_end', олимпиада_id=олимпиада_id))
+    return redirect(url_for('olympiad_end', olympiad_id=olympiad_id))
 
-@app.route('/олимпиада/end/<олимпиада_id>')
-def olympiad_end(олимпиада_id):
+@app.route('/olympiad/end/<olympiad_id>')
+def olympiad_end(olympiad_id):
     
     results_copy = None
     
     with olympiad_lock:
-        if олимпиада_id in olympiads:
-            results_copy = olympiады[олимпиада_id].copy()
+        if olympiad_id in olympiads:
+            results_copy = olympiads[olympiad_id].copy()
 
     if results_copy:
         results = results_copy
@@ -1089,7 +1089,7 @@ def olympiad_end(олимпиада_id):
         tasks_details = results['tasks_details']
         
     else:
-        db_results = db.get_olympiад_results(олимпиада_id)
+        db_results = db.get_olympiad_results(olympiad_id)
         if not db_results:
              return "Олимпиада не найдена", 404
         
@@ -1097,23 +1097,23 @@ def olympiad_end(олимпиада_id):
         tasks_details = db_results['tasks']
         participants_list = db_results['participants_list']
 
-    is_organizer = session.get(f'is_organizer_for_{олимпиада_id}', False)
+    is_organizer = session.get(f'is_organizer_for_{olympiad_id}', False)
     
     return render_template(
-        'олимпиада_end.html', 
+        'olympiad_end.html', 
         results=results, 
         tasks=tasks_details,
         participants_list=participants_list,
         is_organizer=is_organizer,
-        олимпиада_id=олимпиада_id
+        olympiad_id=olympiad_id
     )
     
 
 
-@app.route('/олимпиада/status/<олимпиада_id>')
-def olympiad_status(олимпиада_id):
-    print("DEBUG: /олимпиада/status/ был вызван (HTTP)")
-    state = _get_олимпиада_state(олимпиада_id)
+@app.route('/olympiad/status/<olympiad_id>')
+def olympiad_status(olympiad_id):
+    print("DEBUG: /olympiad/status/ был вызван (HTTP)")
+    state = _get_olympiad_state(olympiad_id)
     if state:
         return jsonify(state)
     else:
@@ -1121,17 +1121,17 @@ def olympiad_status(олимпиада_id):
 
     
 
-@app.route('/олимпиада/host/<олимпиада_id>/disqualify/<participant_id>', methods=['POST'])
+@app.route('/olympiad/host/<olympiad_id>/disqualify/<participant_id>', methods=['POST'])
 @admin_required
-def olympiad_disqualify(олимпиада_id, participant_id):
+def olympiad_disqualify(olympiad_id, participant_id):
     """ОРГАНИЗАТОР: Дисквалифицирует участника."""
     
     nickname = "???"
     with olympiad_lock:
-        if олимпиада_id not in olympiads:
+        if olympiad_id not in olympiads:
             return "Олимпиада не найдена", 404
             
-        oly = olympiads[олимпиада_id]
+        oly = olympiads[olympiad_id]
         
         if participant_id in oly['participants']:
             p_data = oly['participants'][participant_id]
@@ -1147,35 +1147,35 @@ def olympiad_disqualify(олимпиада_id, participant_id):
         else:
             flash('Участник не найден.', 'danger')
 
-    current_state = _get_олимпиада_state(олимпиада_id)
+    current_state = _get_olympiad_state(olympiad_id)
     if current_state:
-        socketio.emit('full_status_update', current_state, to=олимпиада_id)
+        socketio.emit('full_status_update', current_state, to=olympiad_id)
     
         
-    return redirect(url_for('олимпиада_host', олимпиада_id=олимпиада_id))
+    return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
 
-@app.route('/олимпиада/finish_by_host/<олимпиада_id>', methods=['POST'])
+@app.route('/olympiad/finish_by_host/<olympiad_id>', methods=['POST'])
 @admin_required
-def olympiad_finish_by_host(олимпиада_id):
+def olympiad_finish_by_host(olympiad_id):
     
     oly_data_to_save = None
     
     with olympiad_lock:
-        if олимпиада_id in olympiads:
-            olympiads[олимпиада_id]['status'] = 'finished' 
-            oly_data_to_save = olympиады[олимпиада_id].copy()
-            session.pop(f'is_organizer_for_{олимпиада_id}', None)
+        if olympiad_id in olympiads:
+            olympiads[olympiad_id]['status'] = 'finished' 
+            oly_data_to_save = olympiads[olympiad_id].copy()
+            session.pop(f'is_organizer_for_{olympiad_id}', None)
 
-            del olympiads[олимпиада_id] 
+            del olympiads[olympiad_id] 
 
-    socketio.emit('олимпиада_finished', {'status': 'finished'}, to=олимпиада_id)
+    socketio.emit('olympiad_finished', {'status': 'finished'}, to=olympiad_id)
     
     if oly_data_to_save:
-        db.save_олимпиада_data(олимпиада_id, oly_data_to_save)
+        db.save_olympiad_data(olympiad_id, oly_data_to_save)
         
         # --- [FIX] Ставим метку finished в БД ---
         try:
-            db.mark_олимпиада_finished(олимпиада_id)
+            db.mark_olympiad_finished(olympiad_id)
         except Exception as e:
             print(f"DB Error marking finished: {e}")
         # ----------------------------------------
@@ -1477,11 +1477,11 @@ def display_attachment(task_id):
         
     return "Файл не найден", 404
 
-@app.route('/олимпиада/host/<олимпиада_id>/add_participant', methods=['POST'])
+@app.route('/olympiad/host/<olympiad_id>/add_participant', methods=['POST'])
 @admin_required
-def olympiad_add_participant(олимпиада_id):
+def olympiad_add_participant(olympiad_id):
 
-    if олимпиада_id not in olympiads: 
+    if olympiad_id not in olympiads: 
         return "Олимпиада не найдена", 404
 
     nickname = request.form.get('nickname').strip()
@@ -1490,23 +1490,23 @@ def olympiad_add_participant(олимпиада_id):
     
     if not nickname or not password:
         flash('Никнейм и пароль обязательны.', 'danger')
-        return redirect(url_for('олимпиада_host', олимпиада_id=олимпиада_id))
+        return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
         
-    success, message = db.add_participant_to_whitelist(олимпиада_id, nickname, organization, password)
+    success, message = db.add_participant_to_whitelist(olympiad_id, nickname, organization, password)
     
     if success:
         flash(message, 'success')
     else:
         flash(message, 'danger')
         
-    return redirect(url_for('олимпиада_host', олимпиада_id=олимпиада_id))
+    return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
 
 
-@app.route('/олимпиада/host/<олимпиада_id>/remove_participant/<int:participant_db_id>', methods=['POST'])
+@app.route('/olympiad/host/<olympiad_id>/remove_participant/<int:participant_db_id>', methods=['POST'])
 @admin_required
-def olympiad_remove_participant(олимпиада_id, participant_db_id):
+def olympiad_remove_participant(olympiad_id, participant_db_id):
 
-    if олимпиада_id not in olympiads:
+    if olympiad_id not in olympiads:
         return "Олимпиада не найдена", 404
     
     if db.remove_participant_from_whitelist(participant_db_id):
@@ -1514,22 +1514,22 @@ def olympiad_remove_participant(олимпиада_id, participant_db_id):
     else:
         flash('Не удалось удалить участника.', 'danger')
         
-    return redirect(url_for('олимпиада_host', олимпиада_id=олимпиада_id))
+    return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
 
 
-@app.route('/олимпиада/host/<олимпиада_id>/upload_participants', methods=['POST'])
+@app.route('/olympiad/host/<olympiad_id>/upload_participants', methods=['POST'])
 @admin_required
-def olympiad_upload_participants(олимпиада_id): 
-    if олимпиада_id not in olympiads:
+def olympiad_upload_participants(olympiad_id): 
+    if olympiad_id not in olympiads:
         return "Олимпиада не найдена", 404
     if 'participant_file' not in request.files:
         flash('Файл не найден.', 'danger')
-        return redirect(url_for('олимпиада_host', олимпиада_id=олимпиада_id))
+        return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
         
     file = request.files['participant_file']
     if file.filename == '':
         flash('Файл не выбран.', 'danger')
-        return redirect(url_for('олимпиада_host', олимпиада_id=олимпиада_id))
+        return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
 
     if file and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
         try:
@@ -1537,7 +1537,7 @@ def olympiad_upload_participants(олимпиада_id):
             
             if len(df.columns) < 3:
                 flash('Ошибка формата: Ожидается 3 колонки (Никнейм, Организация, Пароль).', 'danger')
-                return redirect(url_for('олимпиада_host', олимпиада_id=олимпиада_id))
+                return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
 
             added_count = 0
             errors_count = 0
@@ -1547,7 +1547,7 @@ def olympiad_upload_participants(олимпиада_id):
                 organization = str(row.iloc[1]).strip()
                 password = str(row.iloc[2]).strip()
                 
-                success, message = db.add_participant_to_whitelist(олимпиада_id, nickname, organization, password)
+                success, message = db.add_participant_to_whitelist(olympiad_id, nickname, organization, password)
                 if success:
                     added_count += 1
                 else:
@@ -1560,20 +1560,20 @@ def olympiad_upload_participants(олимпиада_id):
     else:
         flash('Неверный формат файла. Нужен .xlsx или .xls', 'danger')
             
-    return redirect(url_for('олимпиада_host', олимпиада_id=олимпиада_id))
+    return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
 
 @app.route('/admin/archive')
 @admin_required
 def admin_archive():
     """Список всех прошедших олимпиад."""
-    olympiads_list = db.get_all_олимпиад_list()
-    return render_template('admin_archive.html', olympiads=олимпиад_list)
+    olympiads_list = db.get_all_olympiads_list()
+    return render_template('admin_archive.html', olympiads=olympiads_list)
 
-@app.route('/admin/archive/view/<олимпиада_id>')
+@app.route('/admin/archive/view/<olympiad_id>')
 @admin_required
-def admin_archive_view(олимпиада_id):
+def admin_archive_view(olympiad_id):
     """Детальный просмотр результатов олимпиады с кодом."""
-    data = db.get_олимпиада_results(олимпиада_id)
+    data = db.get_olympiad_results(olympiad_id)
     if not data:
         flash('Олимпиада не найдена или данных нет.', 'warning')
         return redirect(url_for('admin_archive'))
@@ -1582,23 +1582,23 @@ def admin_archive_view(олимпиада_id):
                            results=data['results'], 
                            tasks=data['tasks'], 
                            participants_list=data['participants_list'],
-                           олимпиада_id=олимпиада_id)
+                           olympiad_id=olympiad_id)
 
-@app.route('/admin/archive/delete/<олимпиада_id>', methods=['POST'])
+@app.route('/admin/archive/delete/<olympiad_id>', methods=['POST'])
 @admin_required
-def admin_archive_delete(олимпиада_id):
+def admin_archive_delete(olympiad_id):
     """Удаление олимпиады из базы."""
-    if db.delete_олимпиада_history(олимпиада_id):
-        flash(f'Олимпиада {олимпиада_id} успешно удалена.', 'success')
+    if db.delete_olympiad_history(olympiad_id):
+        flash(f'Олимпиада {olympiad_id} успешно удалена.', 'success')
     else:
         flash('Ошибка при удалении.', 'danger')
     return redirect(url_for('admin_archive'))
 
-@app.route('/admin/archive/export/<олимпиада_id>')
+@app.route('/admin/archive/export/<olympiad_id>')
 @admin_required
-def admin_archive_export(олимпиада_id):
+def admin_archive_export(olympiad_id):
     """Экспорт в Excel."""
-    data = db.get_олимпиада_results(олимпиада_id)
+    data = db.get_olympiad_results(olympiad_id)
     if not data:
         return "Нет данных", 404
         
@@ -1650,21 +1650,21 @@ def admin_archive_export(олимпиада_id):
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'results_{олимпиада_id}.xlsx'
+        download_name=f'results_{olympiad_id}.xlsx'
     )
 
-@app.route('/олимпиада/api/history/<олимпиада_id>')
-def api_get_history(олимпиада_id):
+@app.route('/olympiad/api/history/<olympiad_id>')
+def api_get_history(olympiad_id):
     participant_id = session.get('participant_id')
     if not participant_id:
         return jsonify([])
     
-    raw_history = db.get_participant_history(олимпиада_id, participant_id)
+    raw_history = db.get_participant_history(olympiad_id, participant_id)
 
     tasks_order = []
     with olympiad_lock:
-        if олимпиада_id in olympiads:
-            tasks_order = olympiads[олимпиада_id]['task_ids']
+        if olympiad_id in olympiads:
+            tasks_order = olympiads[olympiad_id]['task_ids']
     
     history_json = []
     letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -1690,9 +1690,9 @@ def api_get_history(олимпиада_id):
         
     return jsonify(history_json)
 
-@app.route('/олимпиада/api/scoreboard/<олимпиада_id>')
-def api_get_scoreboard(олимпиада_id):
-    state = _get_олимпиада_state(олимпиада_id)
+@app.route('/olympiad/api/scoreboard/<olympiad_id>')
+def api_get_scoreboard(olympiad_id):
+    state = _get_olympiad_state(olympiad_id)
     if not state:
         return jsonify({'error': 'Not found'}), 404
     return jsonify(state)
@@ -1703,7 +1703,7 @@ def restore_state_on_startup():
     print("INFO: Восстановление состояния олимпиад...")
     try:
         # 1. Восстанавливаем активные (как было раньше)
-        active_data = db.get_all_active_олимпиад_data()
+        active_data = db.get_all_active_olympiads_data()
         current_time = time.time()
         
         with olympiad_lock:
@@ -1715,7 +1715,7 @@ def restore_state_on_startup():
                 olympiads[oid] = data
 
             # 2. Загружаем запланированные
-            scheduled = db.get_all_scheduled_олимпиад()
+            scheduled = db.get_all_scheduled_olympiads()
             for row in scheduled:
                 oid = row['olympiad_id']
                 # Если олимпиада уже есть в памяти (например, она активна), пропускаем
@@ -1746,46 +1746,46 @@ def restore_state_on_startup():
         traceback.print_exc()
 
 
-@app.route('/олимпиада/edit_time/<олимпиада_id>', methods=['POST'])
+@app.route('/olympiad/edit_time/<olympiad_id>', methods=['POST'])
 @admin_required
-def olympiad_edit_time(олимпиада_id):
+def olympiad_edit_time(olympiad_id):
     new_time_str = request.form.get('new_time')
     if not new_time_str:
-        return redirect(url_for('олимпиада_index'))
+        return redirect(url_for('olympiad_index'))
     
     with olympiad_lock:
-        if олимпиада_id in olympiads:
+        if olympiad_id in olympiads:
             try:
                 dt = datetime.strptime(new_time_str, "%Y-%m-%dT%H:%M")
                 ts = dt.timestamp()
-                olympiads[олимпиада_id]['start_time'] = ts
+                olympiads[olympiad_id]['start_time'] = ts
 
-                if olympiads[олимпиада_id]['status'] == 'running':
-                    db.set_олимпиада_start_time(олимпиада_id, ts)
+                if olympiads[olympiad_id]['status'] == 'running':
+                    db.set_olympiad_start_time(olympiad_id, ts)
                 else:
-                    db.update_scheduled_time(олимпиада_id, ts)
+                    db.update_scheduled_time(olympiad_id, ts)
                 
                 flash('Время старта обновлено.', 'success')
             except ValueError:
                 flash('Ошибка формата времени', 'danger')
-    return redirect(url_for('олимпиада_index'))
+    return redirect(url_for('olympiad_index'))
 
-@app.route('/олимпиада/print_cards/<олимпиада_id>')
+@app.route('/olympiad/print_cards/<olympiad_id>')
 @admin_required
-def olympiad_print_cards(олимпиада_id):
+def olympiad_print_cards(olympiad_id):
     """Генерация страницы для печати карточек участников."""
-    whitelist = db.get_whitelist_for_олимпиада(олимпиада_id)
+    whitelist = db.get_whitelist_for_olympiad(olympiad_id)
     if not whitelist:
         flash('В этой олимпиаде нет зарегистрированных участников (whitelist).', 'warning')
-        return redirect(url_for('олимпиада_host', олимпиада_id=олимпиада_id))
+        return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))
     
     # Получаем название олимпиады
-    oly_name = олимпиада_id
+    oly_name = olympiad_id
     with olympiad_lock:
-        if олимпиада_id in olympiads:
-            oly_name = olympiads[олимпиада_id].get('name', олимпиада_id)
+        if olympiad_id in olympiads:
+            oly_name = olympiads[olympiad_id].get('name', olympiad_id)
 
     return render_template('print_cards.html', 
                            whitelist=whitelist, 
-                           олимпиада_id=олимпиада_id,
+                           olympiad_id=olympiad_id,
                            olympiad_name=oly_name)

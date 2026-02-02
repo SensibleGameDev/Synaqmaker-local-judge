@@ -1094,7 +1094,8 @@ def olympiad_end(olympiad_id):
         
 
         if scoring_mode == 'icpc':
-            participants_list.sort(key=lambda p: (p['total_score'], -p['total_penalty']), reverse=True)
+            # ICPC: Sort by problems solved (descending), then by penalty (ascending)
+            participants_list.sort(key=lambda p: (-p['total_score'], p['total_penalty']))
         else:
             participants_list.sort(key=lambda p: p['total_score'], reverse=True)
         tasks_details = results['tasks_details']

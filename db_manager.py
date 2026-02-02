@@ -20,13 +20,16 @@ SCRIPTS_DIR = os.path.join(BASE_DIR, 'judge_scripts')
 DOCKER_COMMON_ARGS = [
     "docker", "run",
     "--rm",             
-    "--network=none",   
-    "--memory=256m",
-    "--memory-swap=256m",
-    "--cpus=1.0",
-    "--cap-drop=ALL",
-    "--pids-limit=64",
-    "--ulimit", "fsize=10000000",
+    "--network=none",   # Изоляция сети для безопасности
+    "--memory=512m",    # Увеличено для соревнований (было 256m)
+    "--memory-swap=512m",
+    "--cpus=1.5",       # Увеличено для лучшей производительности (было 1.0)
+    "--cap-drop=ALL",   # Убираем все привилегии
+    "--pids-limit=128", # Увеличено для сложных программ (было 64)
+    "--ulimit", "fsize=20000000",  # 20MB лимит на файлы (было 10MB)
+    "--ulimit", "nofile=256:512",  # Лимит на открытые файлы
+    "--read-only",      # Файловая система только для чтения (безопасность)
+    "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",  # Временная файловая система
     "--user=appuser",   
     "-w", "/home/appuser/run" 
 ]
@@ -66,11 +69,16 @@ class DBManager:
         """
         Создает изолированное соединение для каждого запроса.
         Позволяет избежать DB Lock Bottleneck при чтении.
+        Оптимизировано для конкурсов с 100 участниками.
         """
-        # Timeout 60s важен для очереди на запись при 100 участниках
-        conn = sqlite3.connect(self.db_name, timeout=60.0, check_same_thread=False)
-        conn.execute("PRAGMA synchronous=NORMAL;")
-        conn.execute("PRAGMA cache_size=-64000;") # ~64MB кэша
+        # Timeout 120s важен для очереди на запись при 100 участниках
+        conn = sqlite3.connect(self.db_name, timeout=120.0, check_same_thread=False)
+        # PRAGMA оптимизации для высоконагруженных соревнований
+        conn.execute("PRAGMA synchronous=NORMAL;")  # Баланс безопасности и скорости
+        conn.execute("PRAGMA cache_size=-128000;")   # 128MB кэша для лучшей производительности
+        conn.execute("PRAGMA temp_store=MEMORY;")    # Временные таблицы в RAM
+        conn.execute("PRAGMA mmap_size=268435456;")  # 256MB memory-mapped I/O
+        conn.execute("PRAGMA page_size=4096;")       # Оптимальный размер страницы
         conn.row_factory = sqlite3.Row
         return conn
 

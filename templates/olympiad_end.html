@@ -13,6 +13,69 @@
 
 <div class="row justify-content-center">
     <div class="col-md-10">
+        {% if is_organizer and has_frozen_data %}
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-snow"></i> Церемония раскрытия результатов (ICPC Style)</h5>
+            </div>
+            <div class="card-body">
+                <p>Для этой олимпиады доступна эффектная церемония раскрытия результатов в стиле ICPC World Finals.</p>
+                <div class="d-flex gap-3 flex-wrap">
+                    <a href="{{ url_for('olympiad_reveal', olympiad_id=olympiad_id) }}" class="btn btn-warning btn-lg">
+                        <i class="bi bi-play-circle-fill"></i> Начать церемонию раскрытия
+                    </a>
+                    <a href="{{ url_for('api_export_frozen', olympiad_id=olympiad_id) }}" class="btn btn-outline-info">
+                        <i class="bi bi-download"></i> Экспорт данных заморозки (JSON)
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if participants_list and participants_list|length >= 3 %}
+        <div class="card mb-4 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-trophy-fill"></i> Победители</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    {% set winners = [] %}
+                    {% set prev_score = None %}
+                    {% set prev_penalty = None %}
+                    {% set current_place = 0 %}
+                    {% for player in participants_list if not player.disqualified %}
+                        {% if loop.index <= 3 or (prev_score == player.total_score and prev_penalty == player.total_penalty) %}
+                            {% if prev_score != player.total_score or prev_penalty != player.total_penalty %}
+                                {% set current_place = loop.index %}
+                            {% endif %}
+                            {% if current_place <= 3 %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100 {% if current_place == 1 %}border-warning{% elif current_place == 2 %}border-secondary{% else %}border-danger{% endif %}">
+                                        <div class="card-body">
+                                            <h1 class="display-1">
+                                                {% if current_place == 1 %}🥇{% elif current_place == 2 %}🥈{% else %}🥉{% endif %}
+                                            </h1>
+                                            <h4>{{ player.nickname }}</h4>
+                                            <p class="text-muted">{{ player.organization or '-' }}</p>
+                                            <p>
+                                                <strong>{{ player.total_score }}</strong> решено
+                                                {% if results.config.scoring == 'icpc' %}
+                                                    | {{ player.total_penalty }} штраф
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                            {% set prev_score = player.total_score %}
+                            {% set prev_penalty = player.total_penalty %}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
         <div class="card">
             <div class="card-header">
                 <h4>Итоговая таблица (ID: {{ olympiad_id }})</h4>
@@ -105,7 +168,16 @@
                 </small></p>
             </div>
         </div>
-        <div class="text-center mt-4">...</div>
+        <div class="text-center mt-4">
+            <a href="{{ url_for('olympiad_index') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Назад к олимпиадам
+            </a>
+            {% if is_organizer %}
+            <a href="{{ url_for('api_get_winners', olympiad_id=olympiad_id) }}" class="btn btn-info">
+                <i class="bi bi-trophy"></i> API: Победители (JSON)
+            </a>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}

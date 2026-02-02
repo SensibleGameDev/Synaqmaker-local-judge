@@ -132,6 +132,16 @@ class DBManager:
                 if "scoring_type" not in cols: c.execute("ALTER TABLE olympiad_configs ADD COLUMN scoring_type TEXT DEFAULT 'icpc'")
                 if "start_time" not in cols: c.execute("ALTER TABLE olympiad_configs ADD COLUMN start_time REAL")
                 if "allowed_languages" not in cols: c.execute("ALTER TABLE olympiad_configs ADD COLUMN allowed_languages TEXT")
+                if "freeze_minutes" not in cols: c.execute("ALTER TABLE olympiad_configs ADD COLUMN freeze_minutes INTEGER")
+
+                # Table for storing frozen scoreboard data for ICPC-style reveal
+                c.execute('''CREATE TABLE IF NOT EXISTS olympiad_frozen_data (
+                                olympiad_id TEXT PRIMARY KEY,
+                                frozen_scoreboard_json TEXT,
+                                final_scoreboard_json TEXT,
+                                freeze_time REAL,
+                                is_revealed BOOLEAN DEFAULT 0
+                            )''')
 
                 c.execute('''CREATE TABLE IF NOT EXISTS olympiad_submissions (
                                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,7 +181,7 @@ class DBManager:
                             )''')
                 conn.commit()
 
-    def save_olympiad_config(self, olympiad_id, task_ids_list, name=None, duration=None, scoring=None, allowed_languages=None):
+    def save_olympiad_config(self, olympiad_id, task_ids_list, name=None, duration=None, scoring=None, allowed_languages=None, freeze_minutes=None):
         ids_json = json.dumps(task_ids_list)
         languages_json = json.dumps(allowed_languages) if allowed_languages else None
         with self.write_lock:
@@ -195,14 +205,17 @@ class DBManager:
                     if languages_json:
                         query += ", allowed_languages=?"
                         params.append(languages_json)
+                    if freeze_minutes is not None:
+                        query += ", freeze_minutes=?"
+                        params.append(freeze_minutes)
                     query += " WHERE olympiad_id=?"
                     params.append(olympiad_id)
                     c.execute(query, tuple(params))
                 else:
                     c.execute("""
-                        INSERT INTO olympiad_configs (olympiad_id, task_ids_json, name, duration_minutes, scoring_type, allowed_languages)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (olympiad_id, ids_json, name, duration or 300, scoring or 'icpc', languages_json))
+                        INSERT INTO olympiad_configs (olympiad_id, task_ids_json, name, duration_minutes, scoring_type, allowed_languages, freeze_minutes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (olympiad_id, ids_json, name, duration or 300, scoring or 'icpc', languages_json, freeze_minutes))
                 conn.commit()
     
     def set_olympiad_start_time(self, olympiad_id, start_time):
@@ -665,6 +678,53 @@ class DBManager:
             with self._get_conn() as conn:
                 conn.execute("DELETE FROM scheduled_olympiads WHERE olympiad_id = ?", (olympiad_id,))
                 conn.commit()
+
+    # === FREEZE/UNFREEZE METHODS ===
+    def save_frozen_scoreboard(self, olympiad_id, frozen_scoreboard, final_scoreboard, freeze_time):
+        """Save frozen and final scoreboards for ICPC-style reveal"""
+        with self.write_lock:
+            with self._get_conn() as conn:
+                frozen_json = json.dumps(frozen_scoreboard)
+                final_json = json.dumps(final_scoreboard)
+                conn.execute("""
+                    INSERT INTO olympiad_frozen_data (olympiad_id, frozen_scoreboard_json, final_scoreboard_json, freeze_time, is_revealed)
+                    VALUES (?, ?, ?, ?, 0)
+                    ON CONFLICT(olympiad_id) DO UPDATE SET
+                    frozen_scoreboard_json=excluded.frozen_scoreboard_json,
+                    final_scoreboard_json=excluded.final_scoreboard_json,
+                    freeze_time=excluded.freeze_time
+                """, (olympiad_id, frozen_json, final_json, freeze_time))
+                conn.commit()
+
+    def get_frozen_data(self, olympiad_id):
+        """Get frozen scoreboard data for reveal animation"""
+        with self._get_conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT * FROM olympiad_frozen_data WHERE olympiad_id = ?", (olympiad_id,))
+            row = c.fetchone()
+            if row:
+                return {
+                    'frozen_scoreboard': json.loads(row['frozen_scoreboard_json']) if row['frozen_scoreboard_json'] else [],
+                    'final_scoreboard': json.loads(row['final_scoreboard_json']) if row['final_scoreboard_json'] else [],
+                    'freeze_time': row['freeze_time'],
+                    'is_revealed': row['is_revealed']
+                }
+            return None
+
+    def mark_revealed(self, olympiad_id):
+        """Mark olympiad as revealed after unfreeze animation"""
+        with self.write_lock:
+            with self._get_conn() as conn:
+                conn.execute("UPDATE olympiad_frozen_data SET is_revealed = 1 WHERE olympiad_id = ?", (olympiad_id,))
+                conn.commit()
+
+    def get_freeze_minutes(self, olympiad_id):
+        """Get freeze minutes setting for olympiad"""
+        with self._get_conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT freeze_minutes FROM olympiad_configs WHERE olympiad_id = ?", (olympiad_id,))
+            row = c.fetchone()
+            return row['freeze_minutes'] if row and row['freeze_minutes'] else None
     
     def update_submission_immediate(self, olympiad_id, participant_uuid, nickname, task_id, code):
         with self.write_lock:

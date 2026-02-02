@@ -72,6 +72,14 @@
         <span class="badge bg-primary">{{ lang }}</span>
         {% endfor %}
     </p>
+    {% set freeze_mins = olympiad_data.config.freeze_minutes or 0 %}
+    {% if freeze_mins > 0 %}
+    <p class="lead">
+        <i class="bi bi-snow"></i> Заморозка: 
+        <span class="badge bg-info">За {{ freeze_mins }} мин до конца</span>
+        <span id="freeze-status" class="badge bg-secondary d-none">ЗАМОРОЖЕНО</span>
+    </p>
+    {% endif %}
     <h4 id="timer-block" class="d-none mt-3">Оставшееся время: <span id="timer" class="badge bg-secondary">00:00:00</span></h4>
     <hr class="my-4">
 
@@ -85,6 +93,9 @@
         <p>Вы можете наблюдать за результатами или завершить соревнование для всех.</p>
         <button id="finish-btn" class="btn btn-danger">Завершить олимпиаду для всех</button>
         <a href="{{ url_for('olympiad_end', olympiad_id=olympiad_id) }}" class="btn btn-info">Посмотреть текущие результаты</a>
+        <a href="{{ url_for('spectate_olympiad', olympiad_id=olympiad_id) }}" class="btn btn-outline-dark" target="_blank">
+            <i class="bi bi-tv"></i> Зрительский режим
+        </a>
     </div>
 </div>
 
@@ -258,6 +269,18 @@
                     if(timerInterval) clearInterval(timerInterval);
                 } else {
                     startHostTimer(data.remaining_seconds);
+                }
+            }
+            
+            // Update freeze status indicator
+            const freezeStatus = document.getElementById('freeze-status');
+            if (freezeStatus) {
+                if (data.is_frozen) {
+                    freezeStatus.classList.remove('d-none', 'bg-secondary');
+                    freezeStatus.classList.add('bg-info');
+                    freezeStatus.textContent = 'ЗАМОРОЖЕНО';
+                } else {
+                    freezeStatus.classList.add('d-none');
                 }
             }
             

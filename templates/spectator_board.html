@@ -255,6 +255,8 @@
             // ВНУТРЕННИЙ ЦИКЛ ПО ЗАДАЧАМ
             currentTaskIds.forEach(tid => {
                 const taskData = p.scores[tid]; // Переменная p здесь доступна!
+                // Check if there's a frozen version of scores available (for display during freeze)
+                const frozenTaskData = p.frozen_scores ? p.frozen_scores[tid] : null;
                 let cellClass = '';
                 let cellContent = '.';
                 
@@ -262,8 +264,20 @@
                 // Используем String(tid), так как ключи в JSON объекте всегда строки
                 const isFirstSolver = (data.first_solves && data.first_solves[String(tid)] === p.participant_id);
 
+                // Check if this particular task has pending activity during freeze
+                const hasFrozenActivity = data.is_frozen && frozenTaskData && 
+                    (taskData.attempts !== frozenTaskData.attempts || 
+                     taskData.passed !== frozenTaskData.passed);
+
                 if (data.config.scoring === 'icpc') {
-                    if (taskData.passed) {
+                    if (hasFrozenActivity) {
+                        // Show frozen state with orange color and "?" indicator
+                        cellClass = 'bg-warning text-dark border-warning';
+                        const displayAttempts = frozenTaskData.passed ? 
+                            `+${frozenTaskData.attempts > 0 ? frozenTaskData.attempts : ''}` :
+                            (frozenTaskData.attempts > 0 ? `-${frozenTaskData.attempts}` : '');
+                        cellContent = `${displayAttempts}?`;
+                    } else if (taskData.passed) {
                         cellClass = 'bg-success text-white border-success';
                         cellContent = `+${taskData.attempts > 0 ? taskData.attempts : ''}<br><small style="font-size:0.7em">${taskData.penalty}</small>`;
                         
@@ -275,7 +289,11 @@
                     }
                 } else {
                     // Points
-                    if (taskData.score > 0) {
+                    if (hasFrozenActivity) {
+                        // Show frozen state with orange color and "?" indicator
+                        cellClass = 'bg-warning text-dark border-warning';
+                        cellContent = `${frozenTaskData.score}?`;
+                    } else if (taskData.score > 0) {
                         cellClass = taskData.score === 100 ? 'bg-success text-white' : 'text-warning';
                         cellContent = taskData.score;
                         
@@ -294,8 +312,8 @@
                     <div style="font-weight:bold; font-size:1.1em">${p.nickname}</div>
                 </td>
                 <td><span class="badge bg-dark border border-secondary">${p.organization || '-'}</span></td>
-                <td class="text-center text-info fs-5 fw-bold">${p.total_score}</td>
-                <td class="text-center text-secondary fs-6 fw-bold">${p.total_penalty}</td>
+                <td class="text-center text-info fs-5 fw-bold">${data.is_frozen && p.frozen_total_score !== undefined ? p.frozen_total_score : p.total_score}</td>
+                <td class="text-center text-secondary fs-6 fw-bold">${data.is_frozen && p.frozen_total_penalty !== undefined ? p.frozen_total_penalty : p.total_penalty}</td>
                 ${tasksHtml}
             `;
             tbody.appendChild(tr);

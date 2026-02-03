@@ -96,6 +96,19 @@
         <a href="{{ url_for('spectate_olympiad', olympiad_id=olympiad_id) }}" class="btn btn-outline-dark" target="_blank">
             <i class="bi bi-tv"></i> Зрительский режим
         </a>
+        
+        {% set freeze_mins = olympiad_data.config.freeze_minutes or 0 %}
+        {% if freeze_mins > 0 %}
+        <div id="presentation-mode-section" class="mt-3 d-none">
+            <div class="alert alert-warning">
+                <h5><i class="bi bi-snow"></i> Режим заморозки активен!</h5>
+                <p class="mb-2">Таблица заморожена для участников и зрителей. После завершения олимпиады вы сможете провести церемонию раскрытия результатов.</p>
+                <a href="{{ url_for('olympiad_presentation', olympiad_id=olympiad_id) }}" class="btn btn-dark" target="_blank">
+                    <i class="bi bi-projector-fill"></i> Открыть режим презентации
+                </a>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -274,13 +287,21 @@
             
             // Update freeze status indicator
             const freezeStatus = document.getElementById('freeze-status');
+            const presentationSection = document.getElementById('presentation-mode-section');
             if (freezeStatus) {
                 if (data.is_frozen) {
                     freezeStatus.classList.remove('d-none', 'bg-secondary');
                     freezeStatus.classList.add('bg-info');
                     freezeStatus.textContent = 'ЗАМОРОЖЕНО';
+                    // Show presentation mode section during freeze
+                    if (presentationSection) {
+                        presentationSection.classList.remove('d-none');
+                    }
                 } else {
                     freezeStatus.classList.add('d-none');
+                    if (presentationSection) {
+                        presentationSection.classList.add('d-none');
+                    }
                 }
             }
             
@@ -373,6 +394,7 @@
                 // ЯЧЕЙКИ ЗАДАЧ
                 taskIds.forEach(tid => {
                     const scoreInfo = player.scores[String(tid)] || player.scores[tid];
+                    const frozenScoreInfo = player.frozen_scores ? (player.frozen_scores[String(tid)] || player.frozen_scores[tid]) : null;
                     const cellId = `cell-${playerId}-${tid}`;
                     let cellClass = '';
                     let cellContent = '0';
@@ -382,6 +404,11 @@
                     // data.first_solves может прийти с ключами-строками, поэтому String(tid)
                     const isFirstSolver = (data.first_solves && data.first_solves[String(tid)] === playerId);
                     // ===================
+                    
+                    // Check if there's frozen activity (changes during freeze)
+                    const hasFrozenActivity = data.is_frozen && frozenScoreInfo &&
+                        (scoreInfo.attempts !== frozenScoreInfo.attempts || 
+                         scoreInfo.passed !== frozenScoreInfo.passed);
 
                     if (scoreInfo) {
                          if (scoringMode === 'icpc') {
@@ -391,10 +418,16 @@
                                 
                                 // Если FTS -> добавляем спец класс
                                 if (isFirstSolver) cellClass += ' first-to-solve';
+                                
+                                // Show indication of frozen activity for host
+                                if (hasFrozenActivity) cellContent += ' <span class="badge bg-info">🔒</span>';
 
                             } else if (scoreInfo.attempts > 0) {
                                 cellClass = 'table-danger';
                                 cellContent = `-${scoreInfo.attempts}`;
+                                
+                                // Show indication of frozen activity for host
+                                if (hasFrozenActivity) cellContent += ' <span class="badge bg-info">🔒</span>';
                             } else {
                                 cellContent = `0`;
                             }
@@ -405,6 +438,9 @@
                                 if (isFirstSolver && scoreInfo.score === 100) cellClass += ' first-to-solve';
                             }
                             cellContent = `${scoreInfo.score} <small class="text-muted">(${scoreInfo.attempts})</small>`;
+                            
+                            // Show indication of frozen activity for host
+                            if (hasFrozenActivity) cellContent += ' <span class="badge bg-info">🔒</span>';
                         }
                     }
                     

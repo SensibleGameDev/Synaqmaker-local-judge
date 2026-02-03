@@ -136,9 +136,21 @@ def _get_olympiad_state(olympiad_id):
             response['first_solves'] = oly['first_solves']
             response['is_frozen'] = is_frozen
             response['freeze_minutes'] = freeze_minutes
-            # If frozen, return frozen scoreboard instead of live one
+            # If frozen, merge frozen data with live scoreboard for display
             if is_frozen and oly.get('frozen_scoreboard'):
-                response['scoreboard'] = oly['frozen_scoreboard']
+                frozen_map = {p['participant_id']: p for p in oly['frozen_scoreboard']}
+                live_scoreboard = _compute_scoreboard(oly)
+                for p in live_scoreboard:
+                    frozen_p = frozen_map.get(p['participant_id'])
+                    if frozen_p:
+                        p['frozen_scores'] = frozen_p.get('scores', p['scores'])
+                        p['frozen_total_score'] = frozen_p.get('total_score', p['total_score'])
+                        p['frozen_total_penalty'] = frozen_p.get('total_penalty', p['total_penalty'])
+                    else:
+                        p['frozen_scores'] = p['scores']
+                        p['frozen_total_score'] = p['total_score']
+                        p['frozen_total_penalty'] = p['total_penalty']
+                response['scoreboard'] = live_scoreboard
             return response
 
         oly_data_copy = {
@@ -168,9 +180,19 @@ def _get_olympiad_state(olympiad_id):
         response['is_frozen'] = is_frozen
         response['freeze_minutes'] = freeze_minutes
         
-        # If frozen, return frozen scoreboard instead of live one
+        # If frozen, merge frozen data with live scoreboard for display
         if is_frozen and oly.get('frozen_scoreboard'):
-            response['scoreboard'] = oly['frozen_scoreboard']
+            frozen_map = {p['participant_id']: p for p in oly['frozen_scoreboard']}
+            for p in response['scoreboard']:
+                frozen_p = frozen_map.get(p['participant_id'])
+                if frozen_p:
+                    p['frozen_scores'] = frozen_p.get('scores', p['scores'])
+                    p['frozen_total_score'] = frozen_p.get('total_score', p['total_score'])
+                    p['frozen_total_penalty'] = frozen_p.get('total_penalty', p['total_penalty'])
+                else:
+                    p['frozen_scores'] = p['scores']
+                    p['frozen_total_score'] = p['total_score']
+                    p['frozen_total_penalty'] = p['total_penalty']
         
         return response
 
@@ -751,6 +773,11 @@ def olympiad_submit(olympiad_id):
         if p_data.get('finished_early'): 
             return jsonify({'error': 'Олимпиада завершена.'}), 400
         
+        # [FIX Issue 5] Check if task is already fully solved (all tests passed)
+        task_score = p_data.get('scores', {}).get(task_id) or p_data.get('scores', {}).get(str(task_id))
+        if task_score and task_score.get('passed', False):
+            return jsonify({'error': 'Эта задача уже решена. Нельзя отправлять дополнительные решения.'}), 400
+        
         # BUG FIX: Validate start_time exists before using it
         if oly.get('start_time') and oly['start_time'] is not None:
             elapsed = time.time() - oly['start_time']
@@ -1171,6 +1198,15 @@ def olympiad_end(olympiad_id):
         if olympiad_id in olympiads:
             results_copy = olympiads[olympiad_id].copy()
 
+    is_organizer = session.get(f'is_organizer_for_{olympiad_id}', False) or session.get('is_admin', False)
+    
+    # Check if frozen data exists for reveal ceremony
+    frozen_data = db.get_frozen_data(olympiad_id)
+    has_frozen_data = frozen_data is not None
+    
+    # [FIX Issue 3] For non-organizers, show frozen data if available and not yet revealed
+    use_frozen_for_display = has_frozen_data and not is_organizer and frozen_data and not frozen_data.get('is_revealed', False)
+
     if results_copy:
         results = results_copy
         participants_list = []
@@ -1217,11 +1253,21 @@ def olympiad_end(olympiad_id):
         results = db_results['results']
         tasks_details = db_results['tasks']
         participants_list = db_results['participants_list']
-
-    is_organizer = session.get(f'is_organizer_for_{olympiad_id}', False) or session.get('is_admin', False)
     
-    # Check if frozen data exists for reveal ceremony
-    has_frozen_data = db.get_frozen_data(olympiad_id) is not None
+    # [FIX Issue 3] Override participants_list with frozen data for non-organizers
+    if use_frozen_for_display and frozen_data.get('frozen_scoreboard'):
+        frozen_scoreboard = frozen_data['frozen_scoreboard']
+        # Convert frozen scoreboard to participants_list format
+        participants_list = []
+        for p in frozen_scoreboard:
+            participants_list.append({
+                'nickname': p.get('nickname', 'Unknown'),
+                'organization': p.get('organization'),
+                'scores': p.get('scores', {}),
+                'total_score': p.get('total_score', 0),
+                'total_penalty': p.get('total_penalty', 0),
+                'disqualified': p.get('disqualified', False)
+            })
     
     return render_template(
         'olympiad_end.html', 
@@ -1230,7 +1276,8 @@ def olympiad_end(olympiad_id):
         participants_list=participants_list,
         is_organizer=is_organizer,
         has_frozen_data=has_frozen_data,
-        olympiad_id=olympiad_id
+        olympiad_id=olympiad_id,
+        is_frozen_display=use_frozen_for_display
     )
     
 

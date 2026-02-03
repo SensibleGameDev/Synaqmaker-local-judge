@@ -288,7 +288,13 @@
             const isICPC = data.config.scoring === 'icpc';
             const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
             
-            let headerHtml = '<thead class="table-dark"><tr><th>#</th><th>Участник</th>';
+            // Show frozen badge if applicable
+            let frozenBadge = '';
+            if (data.is_frozen) {
+                frozenBadge = '<div class="alert alert-warning mb-2"><i class="bi bi-snow"></i> <strong>Таблица заморожена!</strong> Результаты после заморозки скрыты (отмечены знаком "?").</div>';
+            }
+            
+            let headerHtml = frozenBadge + '<thead class="table-dark"><tr><th>#</th><th>Участник</th>';
             let taskCount = 0;
             if (data.config.task_ids) taskCount = data.config.task_ids.length;
             else if (data.scoreboard.length) taskCount = Object.keys(data.scoreboard[0].scores).length;
@@ -310,23 +316,46 @@
                 const taskIds = data.config.task_ids || Object.keys(p.scores);
                 taskIds.forEach(tid => {
                     let s = p.scores[tid] || {score:0, passed:false, attempts:0, penalty:0};
+                    let frozenS = p.frozen_scores ? (p.frozen_scores[tid] || s) : s;
                     let cellContent = '.';
                     let cellClass = '';
                     
+                    // Check if there's frozen activity (changes during freeze)
+                    const hasFrozenActivity = data.is_frozen && p.frozen_scores &&
+                        (s.attempts !== frozenS.attempts || s.passed !== frozenS.passed);
+                    
                     if (isICPC) {
-                         if (s.passed) {
-                             cellContent = `<span class="text-success fw-bold">+${s.attempts > 0 ? s.attempts : ''}</span><br><small class="text-muted">${s.penalty}</small>`;
-                             cellClass = 'table-success';
-                         } else if (s.attempts > 0) cellContent = `<span class="text-danger">-${s.attempts}</span>`;
+                        if (hasFrozenActivity) {
+                            // Show frozen state with orange color and "?" indicator
+                            cellClass = 'table-warning';
+                            const displayAttempts = frozenS.passed ? 
+                                `+${frozenS.attempts > 0 ? frozenS.attempts : ''}` :
+                                (frozenS.attempts > 0 ? `-${frozenS.attempts}` : '');
+                            cellContent = `<span class="text-dark fw-bold">${displayAttempts}?</span>`;
+                        } else if (s.passed) {
+                            cellContent = `<span class="text-success fw-bold">+${s.attempts > 0 ? s.attempts : ''}</span><br><small class="text-muted">${s.penalty}</small>`;
+                            cellClass = 'table-success';
+                        } else if (s.attempts > 0) {
+                            cellContent = `<span class="text-danger">-${s.attempts}</span>`;
+                        }
                     } else {
-                        cellContent = s.score;
-                        if (s.passed) cellClass = 'table-success fw-bold';
-                        else if (s.score > 0) cellClass = 'table-warning';
+                        if (hasFrozenActivity) {
+                            // Show frozen state with orange color and "?" indicator
+                            cellClass = 'table-warning';
+                            cellContent = `<span class="text-dark fw-bold">${frozenS.score}?</span>`;
+                        } else {
+                            cellContent = s.score;
+                            if (s.passed) cellClass = 'table-success fw-bold';
+                            else if (s.score > 0) cellClass = 'table-warning';
+                        }
                     }
                     rowHtml += `<td class="${cellClass}">${cellContent}</td>`;
                 });
                 
-                rowHtml += `<td class="fw-bold">${p.total_score} ${isICPC ? `<span class="text-muted small">(${p.total_penalty})</span>` : ''}</td></tr>`;
+                // Use frozen totals during freeze for participants
+                const displayTotalScore = data.is_frozen && p.frozen_total_score !== undefined ? p.frozen_total_score : p.total_score;
+                const displayTotalPenalty = data.is_frozen && p.frozen_total_penalty !== undefined ? p.frozen_total_penalty : p.total_penalty;
+                rowHtml += `<td class="fw-bold">${displayTotalScore} ${isICPC ? `<span class="text-muted small">(${displayTotalPenalty})</span>` : ''}</td></tr>`;
                 headerHtml += rowHtml;
             });
             headerHtml += '</tbody>';
@@ -480,7 +509,10 @@
                     alertBox.style.display = 'block';
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="bi bi-play-fill"></i> Отправить решение';
-                    loadHistory(); // Убрать фейковую строку
+                    
+                    // [FIX Issue 2] Explicitly remove pending-row on submission error
+                    document.querySelectorAll('.pending-row').forEach(row => row.remove());
+                    loadHistory(); // Reload actual history
                 }
             });
         });

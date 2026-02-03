@@ -319,12 +319,12 @@
                 const taskIds = data.config.task_ids || Object.keys(p.scores);
                 taskIds.forEach(tid => {
                     let s = p.scores[tid] || {score:0, passed:false, attempts:0, penalty:0};
-                    let frozenS = p.frozen_scores ? (p.frozen_scores[tid] || s) : s;
+                    let frozenS = p.frozen_scores ? (p.frozen_scores[tid] || null) : null;
                     let cellContent = '.';
                     let cellClass = '';
                     
                     // Check if there's frozen activity (changes during freeze)
-                    const hasFrozenActivity = data.is_frozen && p.frozen_scores &&
+                    const hasFrozenActivity = data.is_frozen && frozenS &&
                         (s.attempts !== frozenS.attempts || s.passed !== frozenS.passed);
                     
                     if (isICPC) {
@@ -415,8 +415,8 @@
             // Обновляем мини-блоки задач
             for (const taskId in me.scores) {
                 const s = me.scores[taskId];
-                const frozenS = me.frozen_scores ? (me.frozen_scores[taskId] || s) : s;
-                const hasFrozenActivity = data.is_frozen && me.frozen_scores &&
+                const frozenS = me.frozen_scores ? (me.frozen_scores[taskId] || null) : null;
+                const hasFrozenActivity = data.is_frozen && frozenS &&
                     (s.attempts !== frozenS.attempts || s.passed !== frozenS.passed);
                 const el = document.getElementById(`score-block-${taskId}`);
                 if (el) {

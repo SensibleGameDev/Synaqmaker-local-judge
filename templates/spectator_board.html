@@ -58,6 +58,12 @@
         color: #ffc107 !important;
     }
 
+    .frozen-cell {
+        background-color: #f4a733 !important;
+        color: #1a1a1a !important;
+        border-color: #f4a733 !important;
+    }
+
     /* First To Solve */
     .first-to-solve {
         background-color: #075a4a !important; /* Зеленый */
@@ -272,11 +278,9 @@
                 if (data.config.scoring === 'icpc') {
                     if (hasFrozenActivity) {
                         // Show frozen state with orange color and "?" indicator
-                        cellClass = 'bg-warning text-dark border-warning';
-                        const displayAttempts = frozenTaskData.passed ? 
-                            `+${frozenTaskData.attempts > 0 ? frozenTaskData.attempts : ''}` :
-                            (frozenTaskData.attempts > 0 ? `-${frozenTaskData.attempts}` : '');
-                        cellContent = `${displayAttempts}?`;
+                        cellClass = 'frozen-cell';
+                        const attemptDisplay = frozenTaskData.attempts ?? '';
+                        cellContent = `?${attemptDisplay}`;
                     } else if (taskData.passed) {
                         cellClass = 'bg-success text-white border-success';
                         cellContent = `+${taskData.attempts > 0 ? taskData.attempts : ''}<br><small style="font-size:0.7em">${taskData.penalty}</small>`;
@@ -287,22 +291,22 @@
                         cellClass = 'bg-danger text-white border-danger';
                         cellContent = `-${taskData.attempts}`;
                     }
-                } else {
-                    // Points
-                    if (hasFrozenActivity) {
-                        // Show frozen state with orange color and "?" indicator
-                        cellClass = 'bg-warning text-dark border-warning';
-                        cellContent = `${frozenTaskData.score}?`;
-                    } else if (taskData.score > 0) {
-                        cellClass = taskData.score === 100 ? 'bg-success text-white' : 'text-warning';
-                        cellContent = taskData.score;
-                        
-                        if (isFirstSolver && taskData.score === 100) cellClass += ' first-to-solve';
-                    } else if (taskData.attempts > 0) {
-                        cellContent = '0';
-                        cellClass = 'text-danger';
-                    }
+            } else {
+                // Points
+                if (hasFrozenActivity) {
+                    cellClass = 'frozen-cell';
+                    const attemptDisplay = frozenTaskData.attempts ?? '';
+                    cellContent = `?${attemptDisplay}`;
+                } else if (taskData.score > 0) {
+                    cellClass = taskData.score === 100 ? 'bg-success text-white' : 'text-warning';
+                    cellContent = taskData.score;
+                    
+                    if (isFirstSolver && taskData.score === 100) cellClass += ' first-to-solve';
+                } else if (taskData.attempts > 0) {
+                    cellContent = '0';
+                    cellClass = 'text-danger';
                 }
+            }
                 tasksHtml += `<td class="text-center cell-score ${cellClass}">${cellContent}</td>`;
             });
 

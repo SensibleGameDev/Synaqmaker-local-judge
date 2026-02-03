@@ -319,22 +319,20 @@
                 const taskIds = data.config.task_ids || Object.keys(p.scores);
                 taskIds.forEach(tid => {
                     let s = p.scores[tid] || {score:0, passed:false, attempts:0, penalty:0};
-                    let frozenS = p.frozen_scores ? (p.frozen_scores[tid] || s) : s;
+                    let frozenS = p.frozen_scores?.[tid] ?? null;
                     let cellContent = '.';
                     let cellClass = '';
                     
                     // Check if there's frozen activity (changes during freeze)
-                    const hasFrozenActivity = data.is_frozen && p.frozen_scores &&
+                    const hasFrozenActivity = data.is_frozen && frozenS &&
                         (s.attempts !== frozenS.attempts || s.passed !== frozenS.passed);
                     
                     if (isICPC) {
                         if (hasFrozenActivity) {
                             // Show frozen state with orange color and "?" indicator
                             cellClass = 'table-warning';
-                            const displayAttempts = frozenS.passed ? 
-                                `+${frozenS.attempts > 0 ? frozenS.attempts : ''}` :
-                                (frozenS.attempts > 0 ? `-${frozenS.attempts}` : '');
-                            cellContent = `<span class="text-dark fw-bold">${displayAttempts}?</span>`;
+                            const attemptDisplay = frozenS.attempts ?? '';
+                            cellContent = `<span class="text-dark fw-bold">?${attemptDisplay}</span>`;
                         } else if (s.passed) {
                             cellContent = `<span class="text-success fw-bold">+${s.attempts > 0 ? s.attempts : ''}</span><br><small class="text-muted">${s.penalty}</small>`;
                             cellClass = 'table-success';
@@ -343,9 +341,9 @@
                         }
                     } else {
                         if (hasFrozenActivity) {
-                            // Show frozen state with orange color and "?" indicator
                             cellClass = 'table-warning';
-                            cellContent = `<span class="text-dark fw-bold">${frozenS.score}?</span>`;
+                            const attemptDisplay = frozenS.attempts ?? '';
+                            cellContent = `<span class="text-dark fw-bold">?${attemptDisplay}</span>`;
                         } else {
                             cellContent = s.score;
                             if (s.passed) cellClass = 'table-success fw-bold';
@@ -410,20 +408,36 @@
             // Обновляем Header (Решено/Штраф)
             if (scoringMode === 'icpc') {
                 const totalScoreEl = document.getElementById('icpc-total-score');
-                if (totalScoreEl) totalScoreEl.innerHTML = `Решено: <strong>${me.total_score}</strong> | Штраф: <strong>${me.total_penalty}</strong>`;
+                const displayScore = data.is_frozen && me.frozen_total_score !== undefined ? me.frozen_total_score : me.total_score;
+                const displayPenalty = data.is_frozen && me.frozen_total_penalty !== undefined ? me.frozen_total_penalty : me.total_penalty;
+                if (totalScoreEl) totalScoreEl.innerHTML = `Решено: <strong>${displayScore}</strong> | Штраф: <strong>${displayPenalty}</strong>`;
             }
             // Обновляем мини-блоки задач
             for (const taskId in me.scores) {
                 const s = me.scores[taskId];
+                const frozenS = me.frozen_scores?.[taskId] ?? null;
+                const hasFrozenActivity = data.is_frozen && frozenS &&
+                    (s.attempts !== frozenS.attempts || s.passed !== frozenS.passed);
                 const el = document.getElementById(`score-block-${taskId}`);
                 if (el) {
                     if (scoringMode === 'icpc') {
-                        if (s.passed) el.innerHTML = `<span class="text-success">+${s.attempts > 0 ? s.attempts : ''}</span>`;
-                        else if (s.attempts > 0) el.innerHTML = `<span class="text-danger">-${s.attempts}</span>`;
+                        if (hasFrozenActivity) {
+                            const attemptDisplay = frozenS.attempts ?? '';
+                            el.innerHTML = `<span class="text-warning">?${attemptDisplay}</span>`;
+                        } else if (s.passed) {
+                            el.innerHTML = `<span class="text-success">+${s.attempts > 0 ? s.attempts : ''}</span>`;
+                        } else if (s.attempts > 0) {
+                            el.innerHTML = `<span class="text-danger">-${s.attempts}</span>`;
+                        }
                         else el.innerHTML = `<span class="text-secondary">-</span>`;
                     } else {
-                        el.innerHTML = s.score;
-                        if (s.passed) el.className = 'fw-bold text-success';
+                        if (hasFrozenActivity) {
+                            const attemptDisplay = frozenS.attempts ?? '';
+                            el.innerHTML = `<span class="text-warning">?${attemptDisplay}</span>`;
+                        } else {
+                            el.innerHTML = s.score;
+                            if (s.passed) el.className = 'fw-bold text-success';
+                        }
                     }
                 }
             }

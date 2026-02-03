@@ -195,7 +195,8 @@ def _compute_scoreboard(oly):
                 normalized_scores[str_key] = {'score': 0, 'attempts': 0, 'passed': False, 'penalty': 0}
 
         if scoring_mode == 'icpc':
-            total_score = sum(s.get('score', 0) for s in normalized_scores.values())
+            # Fix: In ICPC mode, total_score should count solved problems (0 or 1 per task), not sum of scores
+            total_score = sum(1 for s in normalized_scores.values() if s.get('passed'))
             total_penalty = sum(s.get('penalty', 0) for s in normalized_scores.values() if s.get('passed'))
         else:
             total_score = sum(s.get('score', 0) for s in normalized_scores.values())
@@ -206,7 +207,8 @@ def _compute_scoreboard(oly):
             'organization': p_data.get('organization', None),
             'scores': normalized_scores,
             'total_score': total_score,
-            'total_penalty': total_penalty 
+            'total_penalty': total_penalty,
+            'solved_count': sum(1 for s in normalized_scores.values() if s.get('passed'))  # Add solved_count for ICPC display
         })
 
     # [FIX] ИСПРАВЛЕНА СОРТИРОВКА ДЛЯ ICPC (по решенным задачам, потом по штрафу)
@@ -1608,9 +1610,10 @@ def display_attachment(task_id):
         file_format = task_data[6] or '' 
 
         mimetype = 'application/octet-stream' 
-        if file_format == '.pdf':
+        # Fix: file_format is stored without dot (e.g., "pdf", "html"), not ".pdf", ".html"
+        if file_format == 'pdf':
             mimetype = 'application/pdf'
-        elif file_format == '.html':
+        elif file_format == 'html':
             mimetype = 'text/html'
         
         return send_file(io.BytesIO(attachment_data), mimetype=mimetype)

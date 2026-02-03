@@ -2077,6 +2077,58 @@ def api_export_frozen(olympiad_id):
     response.headers['Content-Disposition'] = f'attachment; filename=frozen_scoreboard_{olympiad_id}.json'
     return response
 
+@app.route('/olympiad/api/import_frozen_json', methods=['POST'])
+@admin_required
+def api_import_frozen_json():
+    """Import frozen scoreboard data from JSON file and save to database."""
+    if 'json_file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['json_file']
+    
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if not file.filename.endswith('.json'):
+        return jsonify({'error': 'File must be a JSON file'}), 400
+    
+    try:
+        # Read and parse JSON
+        json_data = json.loads(file.read().decode('utf-8'))
+        
+        # Validate required fields
+        required_fields = ['olympiad_id', 'frozen_scoreboard', 'final_scoreboard', 'freeze_time']
+        for field in required_fields:
+            if field not in json_data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        olympiad_id = json_data['olympiad_id']
+        frozen_scoreboard = json_data['frozen_scoreboard']
+        final_scoreboard = json_data['final_scoreboard']
+        freeze_time = json_data['freeze_time']
+        
+        # Validate olympiad_id format (8 characters)
+        if not isinstance(olympiad_id, str) or len(olympiad_id) != 8:
+            return jsonify({'error': 'Invalid olympiad_id format (must be 8 characters)'}), 400
+        
+        # Validate scoreboards are lists
+        if not isinstance(frozen_scoreboard, list) or not isinstance(final_scoreboard, list):
+            return jsonify({'error': 'Scoreboards must be arrays'}), 400
+        
+        # Save to database
+        db.save_frozen_scoreboard(olympiad_id, frozen_scoreboard, final_scoreboard, freeze_time)
+        
+        return jsonify({
+            'status': 'ok',
+            'olympiad_id': olympiad_id,
+            'message': 'Frozen data imported successfully'
+        })
+        
+    except json.JSONDecodeError as e:
+        return jsonify({'error': f'Invalid JSON format: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to import data: {str(e)}'}), 500
+
 def _determine_winners(scoreboard):
     """
     Determine diploma winners from scoreboard (ICPC World Finals style).

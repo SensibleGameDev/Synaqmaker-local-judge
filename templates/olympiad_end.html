@@ -21,6 +21,9 @@
             <div class="card-body">
                 <p>Для этой олимпиады доступна эффектная церемония раскрытия результатов в стиле ICPC World Finals.</p>
                 <div class="d-flex gap-3 flex-wrap">
+                    <a href="{{ url_for('olympiad_presentation', olympiad_id=olympiad_id) }}" class="btn btn-dark btn-lg">
+                        <i class="bi bi-projector-fill"></i> Режим презентации (для проектора)
+                    </a>
                     <a href="{{ url_for('olympiad_reveal', olympiad_id=olympiad_id) }}" class="btn btn-warning btn-lg">
                         <i class="bi bi-play-circle-fill"></i> Начать церемонию раскрытия
                     </a>

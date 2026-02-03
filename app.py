@@ -2019,3 +2019,63 @@ def api_get_winners(olympiad_id):
             3: 'Третье место (Бронза)'
         }
     })
+
+@app.route('/olympiad/api/get_unfreeze_log/<olympiad_id>')
+@admin_required
+def api_get_unfreeze_log(olympiad_id):
+    """
+    API endpoint for ICPC-style unfreeze.
+    Returns all submissions made during the freeze period.
+    Sorted by timestamp ASC.
+    """
+    frozen_data = db.get_frozen_data(olympiad_id)
+    
+    if not frozen_data or not frozen_data['freeze_time']:
+        return jsonify({'error': 'No frozen data available', 'submissions': []}), 404
+    
+    freeze_time = frozen_data['freeze_time']
+    submissions = db.get_submissions_during_freeze(olympiad_id, freeze_time)
+    
+    return jsonify({
+        'olympiad_id': olympiad_id,
+        'freeze_time': freeze_time,
+        'submissions': submissions,
+        'total_count': len(submissions)
+    })
+
+@app.route('/olympiad/presentation/<olympiad_id>')
+@admin_required
+def olympiad_presentation(olympiad_id):
+    """
+    Standalone ICPC-style presentation mode page for projector.
+    High contrast, large fonts, keyboard-controlled reveal animation.
+    """
+    frozen_data = db.get_frozen_data(olympiad_id)
+    
+    if not frozen_data:
+        flash('Нет сохраненных данных заморозки для этой олимпиады.', 'warning')
+        return redirect(url_for('olympiad_end', olympiad_id=olympiad_id))
+    
+    # Get olympiad details
+    db_results = db.get_olympiad_results(olympiad_id)
+    if not db_results:
+        flash('Олимпиада не найдена.', 'danger')
+        return redirect(url_for('admin_archive'))
+    
+    tasks = db_results['tasks']
+    config = db_results['results']
+    
+    # Get olympiad name
+    oly_name = olympiad_id
+    with olympiad_lock:
+        if olympiad_id in olympiads:
+            oly_name = olympiads[olympiad_id].get('name', olympiad_id)
+    
+    return render_template('presentation.html',
+                           olympiad_id=olympiad_id,
+                           olympiad_name=oly_name,
+                           frozen_scoreboard=frozen_data['frozen_scoreboard'],
+                           final_scoreboard=frozen_data['final_scoreboard'],
+                           tasks=tasks,
+                           config=config,
+                           is_revealed=frozen_data['is_revealed'])

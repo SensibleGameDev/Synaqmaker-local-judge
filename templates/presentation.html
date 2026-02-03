@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏆 ICPC Presentation Mode - {{ olympiad_name or olympiad_id }}</title>
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.css') }}">
+    <style>
+        /* === ICPC-STYLE DARK THEME === */
+        * {
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #0a0a1a;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+            overflow-x: hidden;
+        }
+        
+        /* === HEADER === */
+        .presentation-header {
+            background: linear-gradient(135deg, #1a1a3e 0%, #0a0a1a 100%);
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #333;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        .event-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #ffd700;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .live-badge {
+            background: #dc3545;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+            50% { opacity: 0.8; box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+        }
+        
+        .progress-text {
+            font-size: 1.2rem;
+            color: #aaa;
+        }
+        
+        /* === SCOREBOARD TABLE === */
+        .scoreboard-container {
+            padding: 20px 40px;
+            overflow-y: auto;
+            max-height: calc(100vh - 180px);
+        }
+        
+        .scoreboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 1.3rem;
+        }
+        
+        .scoreboard-table th {
+            background: #1a1a3e;
+            color: #a0a0c0;
+            padding: 15px 10px;
+            text-align: center;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 0.9em;
+            border-bottom: 3px solid #333;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .scoreboard-table th.col-rank { width: 60px; }
+        .scoreboard-table th.col-name { text-align: left; min-width: 200px; }
+        .scoreboard-table th.col-org { text-align: left; min-width: 150px; }
+        .scoreboard-table th.col-task { min-width: 80px; }
+        .scoreboard-table th.col-solved { min-width: 80px; }
+        .scoreboard-table th.col-penalty { min-width: 80px; }
+        
+        .scoreboard-row {
+            background: #1a1a2e;
+            border-bottom: 1px solid #2a2a4e;
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), 
+                        background 0.3s ease,
+                        box-shadow 0.3s ease;
+            position: relative;
+        }
+        
+        .scoreboard-row:hover {
+            background: #252545;
+        }
+        
+        .scoreboard-row td {
+            padding: 18px 10px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        
+        /* Rank styling */
+        .rank-cell {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #ffc107;
+        }
+        
+        .rank-1 { color: #ffd700; }
+        .rank-2 { color: #c0c0c0; }
+        .rank-3 { color: #cd7f32; }
+        
+        /* Name and org */
+        .name-cell {
+            text-align: left !important;
+            font-weight: 600;
+            font-size: 1.4em;
+        }
+        
+        .org-cell {
+            text-align: left !important;
+            color: #888;
+            font-size: 0.95em;
+        }
+        
+        /* Task cells */
+        .task-cell {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-weight: 600;
+            font-size: 1.1em;
+            border-radius: 6px;
+            min-width: 70px;
+        }
+        
+        .task-solved {
+            background: #28a745 !important;
+            color: white;
+        }
+        
+        .task-failed {
+            background: #dc3545 !important;
+            color: white;
+        }
+        
+        .task-pending {
+            background: #ffc107 !important;
+            color: #000;
+            animation: blink-pending 1s infinite;
+        }
+        
+        @keyframes blink-pending {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .task-neutral {
+            color: #555;
+        }
+        
+        /* Total columns */
+        .solved-cell {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #00ff88;
+        }
+        
+        .penalty-cell {
+            font-size: 1.1em;
+            color: #888;
+        }
+        
+        /* === FOCUS & REVEAL ANIMATIONS === */
+        .focus-row {
+            background: #2a2a6a !important;
+            box-shadow: 0 0 30px rgba(255, 193, 7, 0.6);
+            transform: scale(1.02);
+            z-index: 50;
+        }
+        
+        .revealing-cell {
+            animation: shimmer 1.2s ease-in-out;
+            background: linear-gradient(90deg, #ff9800, #ffc107, #ff9800) !important;
+            background-size: 200% 100% !important;
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .reveal-flash-green {
+            animation: flashGreen 0.8s ease-out;
+        }
+        
+        @keyframes flashGreen {
+            0% { background: rgba(40, 167, 69, 1); transform: scale(1.2); }
+            100% { background: #28a745; transform: scale(1); }
+        }
+        
+        .reveal-flash-red {
+            animation: flashRed 0.8s ease-out;
+        }
+        
+        @keyframes flashRed {
+            0% { background: rgba(220, 53, 69, 1); transform: scale(1.2); }
+            100% { background: #dc3545; transform: scale(1); }
+        }
+        
+        /* Row moving animation - using CSS transforms */
+        .moving-up {
+            z-index: 100;
+            box-shadow: 0 0 40px rgba(255, 215, 0, 0.8);
+        }
+        
+        /* === CONTROL PANEL === */
+        .control-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(0deg, #0a0a1a 0%, rgba(10, 10, 26, 0.95) 100%);
+            padding: 15px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 2px solid #333;
+            z-index: 1000;
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .ctrl-btn {
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .ctrl-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-reveal {
+            background: linear-gradient(135deg, #ffc107, #ff9800);
+            color: #000;
+        }
+        
+        .btn-reveal:hover {
+            box-shadow: 0 5px 20px rgba(255, 193, 7, 0.5);
+        }
+        
+        .btn-auto {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-stop {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-skip {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-fullscreen {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #aaa;
+        }
+        
+        .speed-slider {
+            width: 120px;
+            accent-color: #ffc107;
+        }
+        
+        .keyboard-hint {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .keyboard-hint kbd {
+            background: #333;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid #555;
+        }
+        
+        /* === WINNER OVERLAY === */
+        .winner-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .winner-overlay.active {
+            display: flex;
+        }
+        
+        .winner-card {
+            background: linear-gradient(135deg, #ffd700, #ff9800);
+            padding: 60px 80px;
+            border-radius: 30px;
+            text-align: center;
+            animation: winnerPop 0.6s ease-out;
+            box-shadow: 0 0 100px rgba(255, 215, 0, 0.8);
+        }
+        
+        @keyframes winnerPop {
+            0% { transform: scale(0); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .winner-medal {
+            font-size: 8rem;
+            margin-bottom: 20px;
+        }
+        
+        .winner-place {
+            font-size: 2rem;
+            color: #1a1a2e;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .winner-name {
+            font-size: 4rem;
+            color: #000;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .winner-org {
+            font-size: 1.5rem;
+            color: #333;
+        }
+        
+        /* === RESPONSIVE === */
+        @media (max-width: 1200px) {
+            .scoreboard-table { font-size: 1rem; }
+            .event-title { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="presentation-header">
+        <div class="event-title">
+            🏆 {{ olympiad_name or olympiad_id }}
+        </div>
+        <div class="status-indicator">
+            <span class="live-badge" id="mode-badge">UNFREEZE MODE</span>
+            <span class="progress-text" id="progress-text">Press SPACE or ENTER to start</span>
+        </div>
+    </header>
+    
+    <!-- Scoreboard -->
+    <div class="scoreboard-container" id="scoreboard-container">
+        <table class="scoreboard-table" id="scoreboard">
+            <thead>
+                <tr>
+                    <th class="col-rank">#</th>
+                    <th class="col-name">Participant</th>
+                    <th class="col-org">Organization</th>
+                    {% set letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
+                    {% for task in tasks %}
+                    <th class="col-task">{{ letters[loop.index0] }}</th>
+                    {% endfor %}
+                    <th class="col-solved">Solved</th>
+                    <th class="col-penalty">Penalty</th>
+                </tr>
+            </thead>
+            <tbody id="scoreboard-body">
+                <!-- Rendered by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <div class="control-buttons">
+            <button class="ctrl-btn btn-reveal" id="btn-reveal" onclick="unfreezer.revealNext()">
+                <i class="bi bi-play-fill"></i> Reveal Next
+            </button>
+            <button class="ctrl-btn btn-auto" id="btn-auto" onclick="unfreezer.startAuto()">
+                <i class="bi bi-fast-forward-fill"></i> Auto
+            </button>
+            <button class="ctrl-btn btn-stop d-none" id="btn-stop" onclick="unfreezer.stopAuto()">
+                <i class="bi bi-pause-fill"></i> Stop
+            </button>
+            <button class="ctrl-btn btn-skip" onclick="unfreezer.skipToEnd()">
+                <i class="bi bi-skip-end-fill"></i> Skip to End
+            </button>
+            <button class="ctrl-btn btn-fullscreen" onclick="toggleFullscreen()">
+                <i class="bi bi-fullscreen"></i>
+            </button>
+        </div>
+        
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" class="speed-slider" id="speed-slider" 
+                   min="300" max="3000" value="1200" step="100">
+            <span id="speed-value">1.2s</span>
+        </div>
+        
+        <div class="keyboard-hint">
+            <kbd>Space</kbd> / <kbd>Enter</kbd> = Reveal Next | 
+            <kbd>A</kbd> = Auto | <kbd>S</kbd> = Stop | <kbd>F</kbd> = Fullscreen
+        </div>
+    </div>
+    
+    <!-- Winner Overlay -->
+    <div class="winner-overlay" id="winner-overlay" onclick="unfreezer.hideWinner()">
+        <div class="winner-card">
+            <div class="winner-medal" id="winner-medal">🥇</div>
+            <div class="winner-place" id="winner-place">1st Place</div>
+            <div class="winner-name" id="winner-name">Champion</div>
+            <div class="winner-org" id="winner-org">Organization</div>
+        </div>
+    </div>
+    
+    <script>
+    /**
+     * Unfreezer - ICPC-Style Scoreboard Reveal System
+     * Manages the state machine, DOM manipulation, and sorting animations.
+     */
+    class Unfreezer {
+        constructor(frozenScoreboard, finalScoreboard, taskIds) {
+            // State
+            this.frozenBoard = JSON.parse(JSON.stringify(frozenScoreboard));
+            this.finalBoard = finalScoreboard;
+            this.taskIds = taskIds;
+            this.currentBoard = JSON.parse(JSON.stringify(frozenScoreboard));
+            
+            // Reveal queue: items to reveal, processed from bottom up
+            this.revealQueue = [];
+            this.currentTeamIndex = -1;
+            this.isRevealing = false;
+            this.autoInterval = null;
+            
+            // Stats
+            this.revealedCount = 0;
+            this.totalToReveal = 0;
+            
+            // DOM references
+            this.tbody = document.getElementById('scoreboard-body');
+            this.progressText = document.getElementById('progress-text');
+            
+            // Initialize
+            this.buildRevealQueue();
+            this.render();
+        }
+        
+        /**
+         * Build the reveal queue by comparing frozen and final scoreboards.
+         * Process teams from bottom to top (ICPC style).
+         */
+        buildRevealQueue() {
+            const finalMap = new Map(this.finalBoard.map(p => [p.participant_id, p]));
+            
+            // Sort by current ranking (worst to best)
+            const sorted = [...this.currentBoard].sort((a, b) => {
+                if (a.total_score !== b.total_score) return a.total_score - b.total_score;
+                return b.total_penalty - a.total_penalty;
+            });
+            
+            sorted.forEach(frozenP => {
+                const finalP = finalMap.get(frozenP.participant_id);
+                if (!finalP) return;
+                
+                const teamPending = [];
+                
+                this.taskIds.forEach(taskId => {
+                    const taskKey = String(taskId);
+                    const frozenTask = frozenP.scores[taskKey] || { score: 0, attempts: 0, passed: false, penalty: 0 };
+                    const finalTask = finalP.scores[taskKey] || { score: 0, attempts: 0, passed: false, penalty: 0 };
+                    
+                    // Check if there's a change after freeze
+                    const hasPendingChange = 
+                        (finalTask.attempts > frozenTask.attempts) ||
+                        (finalTask.passed && !frozenTask.passed);
+                    
+                    if (hasPendingChange) {
+                        teamPending.push({
+                            participant_id: frozenP.participant_id,
+                            nickname: frozenP.nickname,
+                            task_id: taskId,
+                            frozenData: frozenTask,
+                            finalData: finalTask
+                        });
+                    }
+                });
+                
+                if (teamPending.length > 0) {
+                    this.revealQueue.push({
+                        participant_id: frozenP.participant_id,
+                        nickname: frozenP.nickname,
+                        pendingTasks: teamPending
+                    });
+                }
+            });
+            
+            this.totalToReveal = this.revealQueue.reduce((sum, team) => sum + team.pendingTasks.length, 0);
+            this.updateProgress();
+        }
+        
+        /**
+         * Render the scoreboard to DOM.
+         */
+        render() {
+            // Sort current board
+            this.currentBoard.sort((a, b) => {
+                if (b.total_score !== a.total_score) return b.total_score - a.total_score;
+                return a.total_penalty - b.total_penalty;
+            });
+            
+            this.tbody.innerHTML = '';
+            
+            this.currentBoard.forEach((p, index) => {
+                const rank = index + 1;
+                const tr = document.createElement('tr');
+                tr.className = 'scoreboard-row';
+                tr.dataset.participantId = p.participant_id;
+                
+                // Check if this participant has pending reveals
+                const hasPending = this.hasPendingReveals(p.participant_id);
+                
+                // Rank cell
+                let rankClass = '';
+                let rankContent = rank;
+                if (rank === 1) { rankClass = 'rank-1'; rankContent = '🥇'; }
+                else if (rank === 2) { rankClass = 'rank-2'; rankContent = '🥈'; }
+                else if (rank === 3) { rankClass = 'rank-3'; rankContent = '🥉'; }
+                
+                // Task cells
+                let tasksHtml = '';
+                this.taskIds.forEach(taskId => {
+                    const taskKey = String(taskId);
+                    const taskData = p.scores[taskKey] || { score: 0, attempts: 0, passed: false, penalty: 0 };
+                    const isPending = this.isTaskPending(p.participant_id, taskId);
+                    
+                    let cellClass = 'task-cell';
+                    let cellContent = '.';
+                    
+                    if (isPending) {
+                        cellClass += ' task-pending';
+                        cellContent = '?';
+                    } else if (taskData.passed) {
+                        cellClass += ' task-solved';
+                        cellContent = '+' + (taskData.attempts > 0 ? taskData.attempts : '');
+                    } else if (taskData.attempts > 0) {
+                        cellClass += ' task-failed';
+                        cellContent = '-' + taskData.attempts;
+                    } else {
+                        cellClass += ' task-neutral';
+                    }
+                    
+                    tasksHtml += `<td class="${cellClass}" data-task="${taskId}">${cellContent}</td>`;
+                });
+                
+                tr.innerHTML = `
+                    <td class="rank-cell ${rankClass}">${rankContent}</td>
+                    <td class="name-cell">${p.nickname}</td>
+                    <td class="org-cell">${p.organization || '-'}</td>
+                    ${tasksHtml}
+                    <td class="solved-cell">${p.total_score}</td>
+                    <td class="penalty-cell">${p.total_penalty}</td>
+                `;
+                
+                this.tbody.appendChild(tr);
+            });
+        }
+        
+        /**
+         * Check if participant has pending reveals.
+         */
+        hasPendingReveals(participantId) {
+            return this.revealQueue.some(team => team.participant_id === participantId);
+        }
+        
+        /**
+         * Check if a specific task is pending for a participant.
+         */
+        isTaskPending(participantId, taskId) {
+            const team = this.revealQueue.find(t => t.participant_id === participantId);
+            if (!team) return false;
+            return team.pendingTasks.some(pt => pt.task_id === taskId);
+        }
+        
+        /**
+         * Reveal the next pending submission.
+         */
+        async revealNext() {
+            if (this.isRevealing || this.revealQueue.length === 0) {
+                if (this.revealQueue.length === 0) {
+                    this.showComplete();
+                }
+                return;
+            }
+            
+            this.isRevealing = true;
+            
+            // Get the last team in queue (bottom of standings)
+            const team = this.revealQueue[this.revealQueue.length - 1];
+            const pendingTask = team.pendingTasks.shift();
+            
+            // Find row and cell
+            const row = this.tbody.querySelector(`tr[data-participant-id="${team.participant_id}"]`);
+            const cell = row ? row.querySelector(`td[data-task="${pendingTask.task_id}"]`) : null;
+            
+            if (row && cell) {
+                // Store positions before change for FLIP animation
+                const allRows = Array.from(this.tbody.querySelectorAll('.scoreboard-row'));
+                const positionsBefore = new Map();
+                allRows.forEach(r => {
+                    positionsBefore.set(r.dataset.participantId, r.getBoundingClientRect().top);
+                });
+                
+                // Focus on row
+                row.classList.add('focus-row');
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Reveal animation on cell
+                cell.classList.remove('task-pending');
+                cell.classList.add('revealing-cell');
+                
+                await this.sleep(this.getSpeed() * 0.6);
+                
+                // Update cell with final result
+                cell.classList.remove('revealing-cell');
+                
+                const finalData = pendingTask.finalData;
+                if (finalData.passed) {
+                    cell.classList.add('task-solved', 'reveal-flash-green');
+                    cell.textContent = '+' + (finalData.attempts > 0 ? finalData.attempts : '');
+                } else if (finalData.attempts > 0) {
+                    cell.classList.add('task-failed', 'reveal-flash-red');
+                    cell.textContent = '-' + finalData.attempts;
+                }
+                
+                // Update participant data in currentBoard
+                const participant = this.currentBoard.find(p => p.participant_id === team.participant_id);
+                if (participant) {
+                    participant.scores[String(pendingTask.task_id)] = finalData;
+                    
+                    // Recalculate totals (ICPC style)
+                    let totalScore = 0;
+                    let totalPenalty = 0;
+                    Object.values(participant.scores).forEach(s => {
+                        if (s.passed) {
+                            totalScore++;
+                            totalPenalty += s.penalty || 0;
+                        }
+                    });
+                    participant.total_score = totalScore;
+                    participant.total_penalty = totalPenalty;
+                }
+                
+                this.revealedCount++;
+                this.updateProgress();
+                
+                await this.sleep(this.getSpeed() * 0.4);
+                
+                // Remove focus
+                row.classList.remove('focus-row');
+                
+                // Re-render with FLIP animation
+                await this.renderWithAnimation(positionsBefore);
+            }
+            
+            // Remove team from queue if all tasks revealed
+            if (team.pendingTasks.length === 0) {
+                this.revealQueue.pop();
+            }
+            
+            this.isRevealing = false;
+            
+            // Check completion
+            if (this.revealQueue.length === 0) {
+                this.showComplete();
+            }
+        }
+        
+        /**
+         * Re-render with FLIP animation for rank changes.
+         */
+        async renderWithAnimation(positionsBefore) {
+            // Re-sort the board
+            this.currentBoard.sort((a, b) => {
+                if (b.total_score !== a.total_score) return b.total_score - a.total_score;
+                return a.total_penalty - b.total_penalty;
+            });
+            
+            // Update DOM positions
+            this.currentBoard.forEach((p, index) => {
+                const row = this.tbody.querySelector(`tr[data-participant-id="${p.participant_id}"]`);
+                if (!row) return;
+                
+                const rank = index + 1;
+                
+                // Update rank display
+                const rankCell = row.querySelector('.rank-cell');
+                if (rank === 1) {
+                    rankCell.className = 'rank-cell rank-1';
+                    rankCell.textContent = '🥇';
+                } else if (rank === 2) {
+                    rankCell.className = 'rank-cell rank-2';
+                    rankCell.textContent = '🥈';
+                } else if (rank === 3) {
+                    rankCell.className = 'rank-cell rank-3';
+                    rankCell.textContent = '🥉';
+                } else {
+                    rankCell.className = 'rank-cell';
+                    rankCell.textContent = rank;
+                }
+                
+                // Update score cells
+                const solvedCell = row.querySelector('.solved-cell');
+                const penaltyCell = row.querySelector('.penalty-cell');
+                if (solvedCell) solvedCell.textContent = p.total_score;
+                if (penaltyCell) penaltyCell.textContent = p.total_penalty;
+            });
+            
+            // Reorder DOM elements
+            this.currentBoard.forEach(p => {
+                const row = this.tbody.querySelector(`tr[data-participant-id="${p.participant_id}"]`);
+                if (row) {
+                    this.tbody.appendChild(row);
+                }
+            });
+            
+            // FLIP animation
+            requestAnimationFrame(() => {
+                const allRows = Array.from(this.tbody.querySelectorAll('.scoreboard-row'));
+                allRows.forEach(row => {
+                    const oldTop = positionsBefore.get(row.dataset.participantId);
+                    const newTop = row.getBoundingClientRect().top;
+                    
+                    if (oldTop !== undefined && Math.abs(oldTop - newTop) > 5) {
+                        const delta = oldTop - newTop;
+                        row.style.transform = `translateY(${delta}px)`;
+                        row.style.transition = 'none';
+                        
+                        if (delta < 0) {
+                            row.classList.add('moving-up');
+                        }
+                        
+                        requestAnimationFrame(() => {
+                            row.style.transition = 'transform 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
+                            row.style.transform = '';
+                            
+                            setTimeout(() => {
+                                row.classList.remove('moving-up');
+                            }, 800);
+                        });
+                    }
+                });
+            });
+        }
+        
+        /**
+         * Start automatic reveal.
+         */
+        startAuto() {
+            if (this.autoInterval) return;
+            
+            document.getElementById('btn-auto').classList.add('d-none');
+            document.getElementById('btn-stop').classList.remove('d-none');
+            
+            const tick = () => {
+                if (this.revealQueue.length > 0 && !this.isRevealing) {
+                    this.revealNext();
+                } else if (this.revealQueue.length === 0) {
+                    this.stopAuto();
+                }
+            };
+            
+            tick();
+            this.autoInterval = setInterval(tick, this.getSpeed());
+        }
+        
+        /**
+         * Stop automatic reveal.
+         */
+        stopAuto() {
+            if (this.autoInterval) {
+                clearInterval(this.autoInterval);
+                this.autoInterval = null;
+            }
+            document.getElementById('btn-auto').classList.remove('d-none');
+            document.getElementById('btn-stop').classList.add('d-none');
+        }
+        
+        /**
+         * Skip to final results.
+         */
+        skipToEnd() {
+            this.stopAuto();
+            this.currentBoard = JSON.parse(JSON.stringify(this.finalBoard));
+            this.revealQueue = [];
+            this.render();
+            this.showComplete();
+        }
+        
+        /**
+         * Show completion message and winners.
+         */
+        showComplete() {
+            this.progressText.textContent = '✓ Reveal Complete!';
+            document.getElementById('mode-badge').textContent = 'COMPLETE';
+            document.getElementById('mode-badge').style.background = '#28a745';
+            
+            // Auto show top 3 winners
+            setTimeout(() => this.showWinners(), 1000);
+        }
+        
+        /**
+         * Display winners with overlay.
+         */
+        async showWinners() {
+            const places = [
+                { place: 3, medal: '🥉', text: '3rd Place' },
+                { place: 2, medal: '🥈', text: '2nd Place' },
+                { place: 1, medal: '🥇', text: '1st Place' }
+            ];
+            
+            for (const p of places) {
+                const winner = this.currentBoard[p.place - 1];
+                if (winner) {
+                    await this.showWinner(p.medal, p.text, winner.nickname, winner.organization);
+                    await this.sleep(3000);
+                    this.hideWinner();
+                    await this.sleep(500);
+                }
+            }
+        }
+        
+        /**
+         * Show single winner overlay.
+         */
+        showWinner(medal, placeText, name, org) {
+            return new Promise(resolve => {
+                document.getElementById('winner-medal').textContent = medal;
+                document.getElementById('winner-place').textContent = placeText;
+                document.getElementById('winner-name').textContent = name;
+                document.getElementById('winner-org').textContent = org || '';
+                document.getElementById('winner-overlay').classList.add('active');
+                setTimeout(resolve, 100);
+            });
+        }
+        
+        /**
+         * Hide winner overlay.
+         */
+        hideWinner() {
+            document.getElementById('winner-overlay').classList.remove('active');
+        }
+        
+        /**
+         * Update progress display.
+         */
+        updateProgress() {
+            const remaining = this.revealQueue.reduce((sum, t) => sum + t.pendingTasks.length, 0);
+            this.progressText.textContent = `Revealed: ${this.revealedCount} / ${this.totalToReveal} (${remaining} remaining)`;
+        }
+        
+        /**
+         * Get current animation speed from slider.
+         */
+        getSpeed() {
+            return parseInt(document.getElementById('speed-slider').value);
+        }
+        
+        /**
+         * Sleep utility.
+         */
+        sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    }
+    
+    // === INITIALIZATION ===
+    
+    // Data from server
+    const frozenScoreboard = {{ frozen_scoreboard | tojson | safe }};
+    const finalScoreboard = {{ final_scoreboard | tojson | safe }};
+    const taskIds = [{% for task in tasks %}{{ task[0] }}{% if not loop.last %}, {% endif %}{% endfor %}];
+    
+    // Create Unfreezer instance
+    let unfreezer;
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        unfreezer = new Unfreezer(frozenScoreboard, finalScoreboard, taskIds);
+        
+        // Speed slider
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValue = document.getElementById('speed-value');
+        speedSlider.addEventListener('input', () => {
+            speedValue.textContent = (speedSlider.value / 1000).toFixed(1) + 's';
+            
+            // Restart auto if running
+            if (unfreezer.autoInterval) {
+                unfreezer.stopAuto();
+                unfreezer.startAuto();
+            }
+        });
+    });
+    
+    // Keyboard controls
+    document.addEventListener('keydown', (e) => {
+        if (!unfreezer) return;
+        
+        switch (e.key) {
+            case ' ':
+            case 'Enter':
+                e.preventDefault();
+                unfreezer.revealNext();
+                break;
+            case 'a':
+            case 'A':
+                unfreezer.startAuto();
+                break;
+            case 's':
+            case 'S':
+                unfreezer.stopAuto();
+                break;
+            case 'f':
+            case 'F':
+                toggleFullscreen();
+                break;
+            case 'Escape':
+                unfreezer.hideWinner();
+                break;
+        }
+    });
+    
+    // Fullscreen toggle
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    }
+    </script>
+</body>
+</html>

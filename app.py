@@ -706,15 +706,28 @@ def olympiad_submit(olympiad_id):
         if not data:
             return jsonify({'error': 'Данные не переданы.'}), 400
         
-        task_id = int(data.get('task_id', 0))
-        language = data.get('language', '')
-        code = data.get('code', '')
+        # Validate and convert task_id
+        task_id_raw = data.get('task_id')
+        if task_id_raw is None:
+            return jsonify({'error': 'Поле task_id обязательно.'}), 400
         
-        if not task_id or not language or not code:
-            return jsonify({'error': 'Отсутствуют обязательные поля: task_id, language, code.'}), 400
+        try:
+            task_id = int(task_id_raw)
+            if task_id <= 0:
+                return jsonify({'error': 'task_id должен быть положительным числом.'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'error': 'task_id должен быть числом.'}), 400
+        
+        language = data.get('language', '').strip()
+        code = data.get('code', '').strip()
+        
+        if not language:
+            return jsonify({'error': 'Поле language обязательно.'}), 400
+        if not code:
+            return jsonify({'error': 'Код не может быть пустым.'}), 400
             
-    except (ValueError, TypeError, KeyError) as e:
-        return jsonify({'error': f'Некорректный формат данных: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Ошибка обработки запроса: {str(e)}'}), 400
     
     with olympiad_lock: 
         if olympiad_id not in olympiads or not participant_id:
@@ -782,14 +795,33 @@ def olympiad_create():
         # BUG FIX: Validate form data with proper error handling
         try:
             task_ids = request.form.getlist('task_ids')
-            duration = int(request.form.get('duration', 0))
+            
+            # Validate and convert duration
+            duration_raw = request.form.get('duration', '0')
+            try:
+                duration = int(duration_raw)
+            except (ValueError, TypeError):
+                flash('Длительность должна быть числом.', 'danger')
+                return redirect(url_for('olympiad_create'))
+            
             scoring = request.form.get('scoring', 'all_or_nothing')
             mode = request.form.get('mode', 'free')
             name = request.form.get('name', 'Olympiad').strip()
+            
+            # Validate name is not empty after stripping
+            if not name:
+                name = 'Olympiad'  # Fallback to default if empty
+            
             start_time_str = request.form.get('start_time_local', '').strip()
             allowed_languages = request.form.getlist('allowed_languages')
-            freeze_minutes_str = request.form.get('freeze_minutes', '0')
-            freeze_minutes = int(freeze_minutes_str) if freeze_minutes_str and freeze_minutes_str.isdigit() else 0
+            
+            # Validate and convert freeze_minutes
+            freeze_minutes_str = request.form.get('freeze_minutes', '0').strip()
+            try:
+                freeze_minutes = int(freeze_minutes_str) if freeze_minutes_str else 0
+            except (ValueError, TypeError):
+                flash('Время заморозки должно быть числом.', 'danger')
+                return redirect(url_for('olympiad_create'))
             
             # Validate duration
             if not (1 <= duration <= 1440):  # Max 24 hours
@@ -801,7 +833,7 @@ def olympiad_create():
                 flash('Время заморозки не может превышать длительность олимпиады.', 'danger')
                 return redirect(url_for('olympiad_create'))
             
-        except (ValueError, TypeError) as e:
+        except Exception as e:
             flash(f'Ошибка в данных формы: {str(e)}', 'danger')
             return redirect(url_for('olympiad_create'))
         

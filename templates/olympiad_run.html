@@ -9,6 +9,9 @@
         <div class="row align-items-center">
             <div class="col-md-3 border-end">
                 <h4 class="mb-0">Таймер: <span id="timer" class="badge bg-secondary">00:00:00</span></h4>
+                <span id="freeze-indicator" class="badge bg-warning text-dark d-none mt-2">
+                    <i class="bi bi-snow"></i> Таблица заморожена
+                </span>
             </div>
             
             <div class="col-md-7 ps-4">
@@ -401,6 +404,16 @@
         socket.on('full_status_update', (data) => {
             if (data.status === 'running') startServerTimer(data.remaining_seconds);
             else timerEl.textContent = "Завершено";
+
+            // Update freeze indicator
+            const freezeIndicator = document.getElementById('freeze-indicator');
+            if (freezeIndicator) {
+                if (data.is_frozen) {
+                    freezeIndicator.classList.remove('d-none');
+                } else {
+                    freezeIndicator.classList.add('d-none');
+                }
+            }
 
             const me = data.scoreboard.find(p => p.participant_id === participantId);
             if (!me) return;

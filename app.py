@@ -137,21 +137,43 @@ def _get_olympiad_state(olympiad_id):
             response['first_solves'] = oly['first_solves']
             response['is_frozen'] = is_frozen
             response['freeze_minutes'] = freeze_minutes
-            # If frozen, merge frozen data with live scoreboard for display
+            # If frozen, return frozen scoreboard with live data for comparison
             if is_frozen and oly.get('frozen_scoreboard'):
-                frozen_map = {p['participant_id']: p for p in oly['frozen_scoreboard']}
+                # Use frozen scoreboard as base (preserves frozen ranking)
+                frozen_scoreboard = oly['frozen_scoreboard']
+                # Compute live scoreboard for comparison
                 live_scoreboard = _compute_scoreboard(oly)
-                for p in live_scoreboard:
-                    frozen_p = frozen_map.get(p['participant_id'])
-                    if frozen_p:
-                        p['frozen_scores'] = frozen_p.get('scores', p['scores'])
-                        p['frozen_total_score'] = frozen_p.get('total_score', p['total_score'])
-                        p['frozen_total_penalty'] = frozen_p.get('total_penalty', p['total_penalty'])
+                live_map = {p['participant_id']: p for p in live_scoreboard}
+                
+                # Create display scoreboard based on frozen ranking
+                display_scoreboard = []
+                for frozen_p in frozen_scoreboard:
+                    p_id = frozen_p['participant_id']
+                    live_p = live_map.get(p_id)
+                    if live_p:
+                        # Merge: keep frozen ranking/totals, add live scores for comparison
+                        display_p = {
+                            'participant_id': p_id,
+                            'nickname': frozen_p['nickname'],
+                            'organization': frozen_p.get('organization'),
+                            'scores': live_p['scores'],  # Live scores
+                            'total_score': live_p['total_score'],  # Live total
+                            'total_penalty': live_p['total_penalty'],  # Live penalty
+                            'frozen_scores': frozen_p['scores'],  # Frozen scores for comparison
+                            'frozen_total_score': frozen_p['total_score'],  # Frozen total for display
+                            'frozen_total_penalty': frozen_p['total_penalty'],  # Frozen penalty for display
+                            'solved_count': live_p.get('solved_count', 0)
+                        }
                     else:
-                        p['frozen_scores'] = p['scores']
-                        p['frozen_total_score'] = p['total_score']
-                        p['frozen_total_penalty'] = p['total_penalty']
-                response['scoreboard'] = live_scoreboard
+                        # Participant not in live scoreboard (shouldn't happen normally)
+                        # Copy frozen data and add explicit frozen_* fields for templates
+                        display_p = frozen_p.copy()
+                        display_p['frozen_scores'] = frozen_p['scores']
+                        display_p['frozen_total_score'] = frozen_p['total_score']
+                        display_p['frozen_total_penalty'] = frozen_p['total_penalty']
+                    display_scoreboard.append(display_p)
+                
+                response['scoreboard'] = display_scoreboard
             return response
 
         oly_data_copy = {
@@ -181,19 +203,43 @@ def _get_olympiad_state(olympiad_id):
         response['is_frozen'] = is_frozen
         response['freeze_minutes'] = freeze_minutes
         
-        # If frozen, merge frozen data with live scoreboard for display
+        # If frozen, return frozen scoreboard with live data for comparison
         if is_frozen and oly.get('frozen_scoreboard'):
-            frozen_map = {p['participant_id']: p for p in oly['frozen_scoreboard']}
-            for p in response['scoreboard']:
-                frozen_p = frozen_map.get(p['participant_id'])
-                if frozen_p:
-                    p['frozen_scores'] = frozen_p.get('scores', p['scores'])
-                    p['frozen_total_score'] = frozen_p.get('total_score', p['total_score'])
-                    p['frozen_total_penalty'] = frozen_p.get('total_penalty', p['total_penalty'])
+            # Use frozen scoreboard as base (preserves frozen ranking)
+            frozen_scoreboard = oly['frozen_scoreboard']
+            # Live scoreboard already computed in state_to_cache
+            live_scoreboard = response['scoreboard']
+            live_map = {p['participant_id']: p for p in live_scoreboard}
+            
+            # Create display scoreboard based on frozen ranking
+            display_scoreboard = []
+            for frozen_p in frozen_scoreboard:
+                p_id = frozen_p['participant_id']
+                live_p = live_map.get(p_id)
+                if live_p:
+                    # Merge: keep frozen ranking/totals, add live scores for comparison
+                    display_p = {
+                        'participant_id': p_id,
+                        'nickname': frozen_p['nickname'],
+                        'organization': frozen_p.get('organization'),
+                        'scores': live_p['scores'],  # Live scores
+                        'total_score': live_p['total_score'],  # Live total
+                        'total_penalty': live_p['total_penalty'],  # Live penalty
+                        'frozen_scores': frozen_p['scores'],  # Frozen scores for comparison
+                        'frozen_total_score': frozen_p['total_score'],  # Frozen total for display
+                        'frozen_total_penalty': frozen_p['total_penalty'],  # Frozen penalty for display
+                        'solved_count': live_p.get('solved_count', 0)
+                    }
                 else:
-                    p['frozen_scores'] = p['scores']
-                    p['frozen_total_score'] = p['total_score']
-                    p['frozen_total_penalty'] = p['total_penalty']
+                    # Participant not in live scoreboard (shouldn't happen normally)
+                    # Copy frozen data and add explicit frozen_* fields for templates
+                    display_p = frozen_p.copy()
+                    display_p['frozen_scores'] = frozen_p['scores']
+                    display_p['frozen_total_score'] = frozen_p['total_score']
+                    display_p['frozen_total_penalty'] = frozen_p['total_penalty']
+                display_scoreboard.append(display_p)
+            
+            response['scoreboard'] = display_scoreboard
         
         return response
 

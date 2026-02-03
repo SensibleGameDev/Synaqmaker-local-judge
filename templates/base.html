@@ -96,6 +96,11 @@
             <i class="bi bi-archive"></i> Архив
         </a>
     </li>
+    <li class="nav-item">
+        <a class="nav-link {% if 'presentation' in request.path %}active{% endif %}" href="#" onclick="showPresentationHelp()">
+            <i class="bi bi-display"></i> Презентация
+        </a>
+    </li>
     {% endif %}
     
     <li class="nav-item">
@@ -188,7 +193,14 @@
     <script src="{{ url_for('static', filename='js/clike.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/matchbrackets.min.js') }}"></script>
 
-  <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    
+    <script>
+    function showPresentationHelp() {
+        alert('Чтобы открыть режим презентации:\n\n1. Перейдите в Архив\n2. Выберите завершенную олимпиаду\n3. Нажмите кнопку "Presentation Mode" или "Reveal"\n\nРежим презентации доступен для олимпиад с активированной заморозкой.');
+    }
+    </script>
+    
     {% block scripts %}{% endblock %}
 
     

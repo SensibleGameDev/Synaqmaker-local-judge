@@ -358,14 +358,11 @@ class DBManager:
                     'disqualified': p['disqualified'] 
                 })
 
-                # [FIX] Для ICPC: total_score должен быть кол-во решенных задач, а не баллов
-                if scoring_type == 'icpc' and looks_like_ioi:
-                    for p_item in participants_list:
-                        p_item['total_score'] = p_item['solved_count']
-
-            # [FIX] Применяем авто-исправление типа скоринга
-            if scoring_type == 'icpc' and looks_like_ioi:
-                scoring_type = 'points'
+            # [FIX] Для ICPC: total_score должен быть количество решенных задач, а не сумма баллов
+            # Исправляем только если scoring_type действительно ICPC (убираем авто-коррекцию)
+            if scoring_type == 'icpc':
+                for p_item in participants_list:
+                    p_item['total_score'] = p_item['solved_count']
                 
             task_ids_list = []
             status = 'finished'

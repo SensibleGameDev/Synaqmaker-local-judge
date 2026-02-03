@@ -584,19 +584,17 @@ def index():
 
 @app.route('/olympiad')
 def olympiad_index():
-    active_olympiads = {}
-    if session.get('is_admin'):
-        with olympiad_lock:
-            active_olympiads = {
-                oid: {
-                    'name': data.get('name'),
-                    'status': data.get('status'),
-                    'participants': data.get('participants', {}),
-                    'start_time': data.get('start_time')
-                }
-                for oid, data in olympiads.items()
-                if data.get('status') in {'waiting', 'scheduled', 'running'}
+    with olympiad_lock:
+        active_olympiads = {
+            oid: {
+                'name': data.get('name'),
+                'status': data.get('status'),
+                'participants': data.get('participants', {}),
+                'start_time': data.get('start_time')
             }
+            for oid, data in olympiads.items()
+            if data.get('status') in {'waiting', 'scheduled', 'running'}
+        }
     return render_template('olympiad_index.html', active_olympiads=active_olympiads)
 
 @app.route('/spectate/<olympiad_id>')

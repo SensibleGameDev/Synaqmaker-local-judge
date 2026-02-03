@@ -293,7 +293,11 @@
                     }
             } else {
                 // Points
-                if (taskData.score > 0) {
+                if (hasFrozenActivity) {
+                    cellClass = 'frozen-cell';
+                    const displayAttempts = frozenTaskData.attempts || 0;
+                    cellContent = `?${displayAttempts}`;
+                } else if (taskData.score > 0) {
                     cellClass = taskData.score === 100 ? 'bg-success text-white' : 'text-warning';
                     cellContent = taskData.score;
                     

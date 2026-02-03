@@ -340,9 +340,14 @@
                             cellContent = `<span class="text-danger">-${s.attempts}</span>`;
                         }
                     } else {
-                        cellContent = s.score;
-                        if (s.passed) cellClass = 'table-success fw-bold';
-                        else if (s.score > 0) cellClass = 'table-warning';
+                        if (hasFrozenActivity) {
+                            cellClass = 'table-warning';
+                            cellContent = `<span class="text-dark fw-bold">?${frozenS.attempts || 0}</span>`;
+                        } else {
+                            cellContent = s.score;
+                            if (s.passed) cellClass = 'table-success fw-bold';
+                            else if (s.score > 0) cellClass = 'table-warning';
+                        }
                     }
                     rowHtml += `<td class="${cellClass}">${cellContent}</td>`;
                 });
@@ -424,8 +429,12 @@
                         }
                         else el.innerHTML = `<span class="text-secondary">-</span>`;
                     } else {
-                        el.innerHTML = s.score;
-                        if (s.passed) el.className = 'fw-bold text-success';
+                        if (hasFrozenActivity) {
+                            el.innerHTML = `<span class="text-warning">?${frozenS.attempts || 0}</span>`;
+                        } else {
+                            el.innerHTML = s.score;
+                            if (s.passed) el.className = 'fw-bold text-success';
+                        }
                     }
                 }
             }

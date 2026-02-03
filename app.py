@@ -288,6 +288,120 @@ def _compute_scoreboard(oly):
     
     return scoreboard
 
+def _compute_scoreboard_at_time(oly, freeze_time):
+    """
+    Compute scoreboard as it was at a specific timestamp (for freeze reconstruction).
+    Only includes submissions made before freeze_time.
+    This is used when frozen scoreboard wasn't captured during olympiad runtime.
+    """
+    olympiad_id = oly.get('olympiad_id')
+    if not olympiad_id:
+        # Fallback: compute current scoreboard
+        return _compute_scoreboard(oly)
+    
+    # Get all submissions before freeze time from database
+    with db._get_conn() as conn:
+        c = conn.cursor()
+        c.execute("""
+            SELECT participant_id, task_id, verdict, timestamp, 
+                   tests_passed, total_tests
+            FROM olympiad_history
+            WHERE olympiad_id = ? AND timestamp < ?
+            ORDER BY timestamp ASC
+        """, (olympiad_id, freeze_time))
+        submissions = c.fetchall()
+    
+    # Reconstruct participant scores from submission history
+    participants_scores = {}
+    scoring_mode = oly['config'].get('scoring', 'all_or_nothing')
+    
+    for sub in submissions:
+        p_id = sub['participant_id']
+        task_id = str(sub['task_id'])
+        verdict = sub['verdict']
+        timestamp = sub['timestamp']
+        tests_passed = sub['tests_passed']
+        total_tests = sub['total_tests']
+        
+        if p_id not in participants_scores:
+            participants_scores[p_id] = {}
+        
+        if task_id not in participants_scores[p_id]:
+            participants_scores[p_id][task_id] = {
+                'score': 0,
+                'attempts': 0,
+                'passed': False,
+                'penalty': 0,
+                'first_solve_time': None
+            }
+        
+        task_info = participants_scores[p_id][task_id]
+        
+        # Update based on scoring mode
+        if scoring_mode == 'icpc':
+            if not task_info['passed']:
+                task_info['attempts'] += 1
+                if verdict == 'Accepted':
+                    task_info['passed'] = True
+                    task_info['score'] = 1
+                    # Calculate penalty in minutes from olympiad start
+                    if oly.get('start_time'):
+                        minutes = int((timestamp - oly['start_time']) / 60)
+                        # ICPC penalty = time + 20 * wrong_attempts
+                        task_info['penalty'] = minutes + (task_info['attempts'] - 1) * 20
+                    task_info['first_solve_time'] = timestamp
+        else:
+            # All-or-nothing mode
+            task_info['attempts'] += 1
+            if verdict == 'Accepted':
+                task_info['passed'] = True
+                task_info['score'] = 1
+    
+    # Build scoreboard from reconstructed scores
+    scoreboard = []
+    for p_id, p_data in oly['participants'].items():
+        scores_dict = participants_scores.get(p_id, {})
+        
+        # Normalize task IDs to strings
+        normalized_scores = {}
+        for task_id in oly.get('task_ids', []):
+            str_tid = str(task_id)
+            if str_tid in scores_dict:
+                normalized_scores[str_tid] = scores_dict[str_tid]
+            else:
+                normalized_scores[str_tid] = {
+                    'score': 0,
+                    'attempts': 0,
+                    'passed': False,
+                    'penalty': 0
+                }
+        
+        # Calculate totals
+        if scoring_mode == 'icpc':
+            total_score = sum(1 for s in normalized_scores.values() if s.get('passed'))
+            total_penalty = sum(s.get('penalty', 0) for s in normalized_scores.values() if s.get('passed'))
+        else:
+            total_score = sum(s.get('score', 0) for s in normalized_scores.values())
+            total_penalty = 0
+        
+        scoreboard.append({
+            'participant_id': p_id,
+            'nickname': p_data['nickname'],
+            'organization': p_data.get('organization', None),
+            'scores': normalized_scores,
+            'total_score': total_score,
+            'total_penalty': total_penalty,
+            'solved_count': sum(1 for s in normalized_scores.values() if s.get('passed'))
+        })
+    
+    # Sort scoreboard
+    if scoring_mode == 'icpc':
+        scoreboard.sort(key=lambda p: (-p['total_score'], p['total_penalty']))
+    else:
+        scoreboard.sort(key=lambda p: -p['total_score'])
+    
+    return scoreboard
+
 @socketio.on('join_room')
 def handle_join_room(data):
     room = data.get('room')
@@ -964,6 +1078,7 @@ def olympiad_create():
             }
 
             olympiads[olympiad_id] = {
+                'olympiad_id': olympiad_id,
                 'status': status,
                 'name': name,
                 'task_ids': tasks_ordered,
@@ -1405,11 +1520,41 @@ def olympiad_finish_by_host(olympiad_id):
             
             # Save frozen and final scoreboards for ICPC-style reveal
             freeze_minutes = oly_data_to_save['config'].get('freeze_minutes', 0)
-            if freeze_minutes > 0 and oly_data_to_save.get('frozen_scoreboard'):
-                frozen_scoreboard = oly_data_to_save['frozen_scoreboard']
-                final_scoreboard = _compute_scoreboard(oly_data_to_save)
-                # Use the actual freeze time when it was triggered, not current time
-                freeze_time = oly_data_to_save.get('freeze_time', time.time())
+            if freeze_minutes > 0:
+                print(f"[FREEZE] Olympiad {olympiad_id} has freeze configured: {freeze_minutes} minutes")
+                # Check if frozen scoreboard was already captured during olympiad
+                if oly_data_to_save.get('frozen_scoreboard'):
+                    # Use the already-captured frozen scoreboard
+                    print(f"[FREEZE] Using frozen scoreboard captured during olympiad runtime")
+                    frozen_scoreboard = oly_data_to_save['frozen_scoreboard']
+                    freeze_time = oly_data_to_save.get('freeze_time')
+                else:
+                    # Frozen scoreboard was never captured during olympiad
+                    # This happens if no one viewed the scoreboard during freeze period
+                    # Compute frozen scoreboard now based on freeze time
+                    print(f"[FREEZE] Frozen scoreboard not captured during runtime, reconstructing from history")
+                    if oly_data_to_save.get('start_time'):
+                        duration_sec = oly_data_to_save['config']['duration_minutes'] * 60
+                        freeze_threshold_seconds = freeze_minutes * 60
+                        # Calculate when freeze should have started
+                        freeze_time = oly_data_to_save['start_time'] + (duration_sec - freeze_threshold_seconds)
+                        print(f"[FREEZE] Calculated freeze_time: {freeze_time} (start: {oly_data_to_save['start_time']}, duration: {duration_sec}s)")
+                        
+                        # Compute frozen scoreboard: only include submissions before freeze_time
+                        frozen_scoreboard = _compute_scoreboard_at_time(oly_data_to_save, freeze_time)
+                        print(f"[FREEZE] Reconstructed frozen scoreboard with {len(frozen_scoreboard)} participants")
+                    else:
+                        # No start time recorded, cannot reconstruct
+                        print(f"[FREEZE] ERROR: No start_time found, cannot reconstruct frozen scoreboard")
+                        freeze_time = None
+                        frozen_scoreboard = None
+                
+                # Always compute final scoreboard (with all submissions)
+                if frozen_scoreboard:
+                    final_scoreboard = _compute_scoreboard(oly_data_to_save)
+                    print(f"[FREEZE] Computed final scoreboard with {len(final_scoreboard)} participants")
+                else:
+                    print(f"[FREEZE] WARNING: No frozen scoreboard available, skipping freeze data save")
             
             session.pop(f'is_organizer_for_{olympiad_id}', None)
             del olympiads[olympiad_id] 
@@ -1422,9 +1567,13 @@ def olympiad_finish_by_host(olympiad_id):
         # Save frozen data for reveal ceremony if applicable
         if frozen_scoreboard and final_scoreboard:
             try:
+                print(f"[FREEZE] Saving frozen data to database for olympiad {olympiad_id}")
                 db.save_frozen_scoreboard(olympiad_id, frozen_scoreboard, final_scoreboard, freeze_time)
+                print(f"[FREEZE] Successfully saved frozen data to database")
             except Exception as e:
-                print(f"DB Error saving frozen data: {e}")
+                print(f"[FREEZE] DB Error saving frozen data: {e}")
+                import traceback
+                traceback.print_exc()
         
         # --- [FIX] Ставим метку finished в БД ---
         try:

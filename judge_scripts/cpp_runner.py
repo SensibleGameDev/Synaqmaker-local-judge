@@ -6,16 +6,26 @@ import time
 import io
 from contextlib import redirect_stdout
 
+# Import shared utilities
+try:
+    from judge_utils import get_tokens, compare_outputs, check_verdict_with_checker
+    HAS_JUDGE_UTILS = True
+except ImportError:
+    HAS_JUDGE_UTILS = False
+    # Fallback implementation if judge_utils is not available
+    def get_tokens(text):
+        if not text:
+            return []
+        return text.strip().split()
+    
+    def compare_outputs(user_output, expected_output):
+        return get_tokens(user_output) == get_tokens(expected_output)
+
 try:
     import checker
     HAS_CHECKER = True
 except ImportError:
     HAS_CHECKER = False
-
-def get_tokens(text):
-    if not text:
-        return []
-    return text.strip().split()
 
 def run_judge():
     results = []
@@ -74,18 +84,24 @@ def run_judge():
                 verdict = "Runtime Error"
             else:
                 if HAS_CHECKER:
-                    try:
-                        f_dummy = io.StringIO()
-                        with redirect_stdout(f_dummy):
-                            is_ok = checker.check(test_input, output, expected_output)
-                        verdict = "Accepted" if is_ok else "Wrong Answer"
-                    except Exception as check_err:
-                        verdict = "Judge Error"
-                        error += f"\nChecker failed: {check_err}"
+                    if HAS_JUDGE_UTILS:
+                        verdict, checker_error = check_verdict_with_checker(
+                            checker, test_input, output, expected_output
+                        )
+                        if checker_error:
+                            error += checker_error
+                    else:
+                        # Fallback to original implementation
+                        try:
+                            f_dummy = io.StringIO()
+                            with redirect_stdout(f_dummy):
+                                is_ok = checker.check(test_input, output, expected_output)
+                            verdict = "Accepted" if is_ok else "Wrong Answer"
+                        except Exception as check_err:
+                            verdict = "Judge Error"
+                            error += f"\nChecker failed: {check_err}"
                 else:
-                    user_tokens = get_tokens(output)
-                    expected_tokens = get_tokens(expected_output)
-                    if user_tokens == expected_tokens:
+                    if compare_outputs(output, expected_output):
                         verdict = "Accepted"
                     else:
                         verdict = "Wrong Answer"

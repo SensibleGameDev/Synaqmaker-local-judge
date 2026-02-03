@@ -829,8 +829,8 @@ def _run_batch(code, test_data_list, language, judge_script_filename, docker_ima
 
         try:
             return json.loads(output), None
-        except:
-            return None, f"System Error (JSON): {output} | Err: {err}"
+        except (json.JSONDecodeError, ValueError) as e:
+            return None, f"System Error (JSON parse failed): {str(e)[:100]} | Output: {output[:200]}"
 
     except subprocess.TimeoutExpired: return None, "Time Limit Exceeded (Overall)"
     except Exception as e: return None, f"Execution error: {str(e)}"

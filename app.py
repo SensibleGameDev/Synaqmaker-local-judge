@@ -1183,8 +1183,8 @@ def olympiad_end(olympiad_id):
             total_penalty = 0
             
             if scoring_mode == 'icpc':
-                # BUG FIX: Validate score dict has required keys before accessing
-                total_score = sum(s.get('score', 0) for s in p_data['scores'].values())
+                # Fix: In ICPC mode, count solved problems, not sum of scores
+                total_score = sum(1 for s in p_data['scores'].values() if s.get('passed', False))
                 total_penalty = sum(s.get('penalty', 0) for s in p_data['scores'].values() if s.get('passed', False))
             else:
                 total_score = sum(s.get('score', 0) for s in p_data['scores'].values())

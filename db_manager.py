@@ -455,7 +455,9 @@ class DBManager:
                     conn.execute("DELETE FROM olympiad_history WHERE olympiad_id = ?", (olympiad_id,))
                     conn.commit()
                 return True
-            except: return False
+            except sqlite3.Error as e:
+                print(f"DB Error: Failed to delete olympiad history for {olympiad_id}: {e}")
+                return False
         
     def get_whitelist_for_olympiad(self, olympiad_id):
         with self._get_conn() as conn:

@@ -332,7 +332,7 @@
                             // Show frozen state with orange color and "?" indicator
                             cellClass = 'table-warning';
                             const attemptCount = frozenS.attempts || 0;
-                            cellContent = `<span class="text-dark fw-bold">?${attemptCount}</span>`;
+                            cellContent = `<span class="text-dark fw-bold">?${attemptCount || ''}</span>`;
                         } else if (s.passed) {
                             cellContent = `<span class="text-success fw-bold">+${s.attempts > 0 ? s.attempts : ''}</span><br><small class="text-muted">${s.penalty}</small>`;
                             cellClass = 'table-success';
@@ -343,7 +343,7 @@
                         if (hasFrozenActivity) {
                             cellClass = 'table-warning';
                             const attemptCount = frozenS.attempts || 0;
-                            cellContent = `<span class="text-dark fw-bold">?${attemptCount}</span>`;
+                            cellContent = `<span class="text-dark fw-bold">?${attemptCount || ''}</span>`;
                         } else {
                             cellContent = s.score;
                             if (s.passed) cellClass = 'table-success fw-bold';
@@ -423,7 +423,7 @@
                     if (scoringMode === 'icpc') {
                         if (hasFrozenActivity) {
                             const attemptCount = frozenS.attempts || 0;
-                            el.innerHTML = `<span class="text-warning">?${attemptCount}</span>`;
+                            el.innerHTML = `<span class="text-warning">?${attemptCount || ''}</span>`;
                         } else if (s.passed) {
                             el.innerHTML = `<span class="text-success">+${s.attempts > 0 ? s.attempts : ''}</span>`;
                         } else if (s.attempts > 0) {

@@ -75,7 +75,7 @@
             <i class="bi bi-check2-square"></i> Synaqmaker
         </a>
     {% else %}
-        <a class="navbar-brand" href="{{ url_for('olympiad_index') }}">
+        <a class="navbar-brand" href="{{ url_for('olympiad_join') }}">
             <i class="bi bi-check2-square"></i> Synaqmaker
         </a>
     {% endif %}
@@ -104,7 +104,7 @@
     {% endif %}
     
     <li class="nav-item">
-        <a class="nav-link {% if 'olympiad' in request.path %}active{% endif %}" href="{{ url_for('olympiad_index') }}">Олимпиада</a>
+        <a class="nav-link {% if 'olympiad' in request.path %}active{% endif %}" href="{{ url_for('olympiad_join') }}">Олимпиада</a>
     </li>
 </ul>
     <ul class="navbar-nav">

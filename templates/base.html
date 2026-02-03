@@ -169,7 +169,40 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Чтобы открыть режим презентации:</p>
+                    <div class="mb-4">
+                        <h6 class="fw-bold"><i class="bi bi-rocket-takeoff"></i> Быстрый доступ к презентации</h6>
+                        <p>Введите ID олимпиады или загрузите JSON файл для начала разморозки:</p>
+                        
+                        <!-- Olympiad ID Input -->
+                        <div class="mb-3">
+                            <label for="presentationOlympiadId" class="form-label">ID Олимпиады:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="presentationOlympiadId" placeholder="Например: ABC12345" maxlength="8">
+                                <button class="btn btn-primary" type="button" onclick="openPresentationById()">
+                                    <i class="bi bi-play-circle"></i> Открыть
+                                </button>
+                            </div>
+                            <small class="text-muted">8-символьный код олимпиады</small>
+                        </div>
+                        
+                        <div class="text-center my-3">
+                            <span class="text-muted">или</span>
+                        </div>
+                        
+                        <!-- JSON File Upload -->
+                        <div class="mb-3">
+                            <label for="presentationJsonFile" class="form-label">Загрузить JSON файл:</label>
+                            <input type="file" class="form-control" id="presentationJsonFile" accept=".json">
+                            <small class="text-muted">Файл с данными заморозки (экспортированный через API)</small>
+                        </div>
+                        <button class="btn btn-success w-100" type="button" onclick="uploadPresentationJson()">
+                            <i class="bi bi-upload"></i> Загрузить и начать разморозку
+                        </button>
+                    </div>
+                    
+                    <hr>
+                    
+                    <p><strong>Альтернативный способ:</strong></p>
                     <ol>
                         <li>Перейдите в <strong>Архив</strong></li>
                         <li>Выберите завершенную олимпиаду</li>
@@ -187,11 +220,63 @@
                     </ul>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Понятно</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
                 </div>
             </div>
         </div>
     </div>
+    
+    <script>
+        function openPresentationById() {
+            const olympiadId = document.getElementById('presentationOlympiadId').value.trim();
+            if (!olympiadId) {
+                alert('Пожалуйста, введите ID олимпиады');
+                return;
+            }
+            if (olympiadId.length !== 8) {
+                alert('ID олимпиады должен содержать 8 символов');
+                return;
+            }
+            window.open('/olympiad/presentation/' + olympiadId, '_blank');
+        }
+        
+        function uploadPresentationJson() {
+            const fileInput = document.getElementById('presentationJsonFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Пожалуйста, выберите JSON файл');
+                return;
+            }
+            
+            if (!file.name.endsWith('.json')) {
+                alert('Пожалуйста, выберите файл в формате JSON');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('json_file', file);
+            
+            fetch('/olympiad/api/import_frozen_json', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Ошибка: ' + data.error);
+                } else if (data.olympiad_id) {
+                    // Close modal and open presentation
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('presentationHelpModal'));
+                    modal.hide();
+                    window.open('/olympiad/presentation/' + data.olympiad_id, '_blank');
+                }
+            })
+            .catch(error => {
+                alert('Ошибка при загрузке файла: ' + error);
+            });
+        }
+    </script>
     
     
     <script>

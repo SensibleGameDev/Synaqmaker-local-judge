@@ -163,6 +163,48 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 15px;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    
+    .control-panel.hidden {
+        transform: translateY(-100%);
+        opacity: 0;
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: -1;
+    }
+    
+    .toggle-controls-btn {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1001;
+        background: rgba(26, 26, 46, 0.9);
+        color: #fff;
+        border: 2px solid #ffc107;
+        padding: 10px 15px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1.1em;
+        transition: all 0.3s;
+    }
+    
+    .toggle-controls-btn:hover {
+        background: rgba(255, 193, 7, 0.2);
+        transform: scale(1.05);
+    }
+    
+    .reveal-container.fullscreen {
+        max-width: 100%;
+        padding: 10px;
+    }
+    
+    .reveal-container.fullscreen .scoreboard-table {
+        font-size: 1.2em;
     }
     
     .control-btn {
@@ -262,9 +304,83 @@
     .speed-slider {
         width: 150px;
     }
+    
+    /* Diploma announcement banner */
+    .diploma-banner {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #1a1a3e 0%, #2a2a5a 100%);
+        padding: 60px 80px;
+        border-radius: 20px;
+        z-index: 1001;
+        text-align: center;
+        box-shadow: 0 0 60px rgba(255, 215, 0, 0.6);
+        animation: diplomaAppear 0.6s ease-out;
+        border: 3px solid #ffd700;
+        min-width: 600px;
+    }
+    
+    @keyframes diplomaAppear {
+        0% { transform: translate(-50%, -50%) scale(0) rotate(-5deg); opacity: 0; }
+        60% { transform: translate(-50%, -50%) scale(1.05) rotate(0deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+    }
+    
+    .diploma-banner .diploma-degree {
+        font-size: 2.5em;
+        font-weight: 900;
+        color: #ffd700;
+        text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        margin-bottom: 20px;
+        letter-spacing: 3px;
+    }
+    
+    .diploma-banner .diploma-nickname {
+        font-size: 3.5em;
+        font-weight: bold;
+        color: #ffffff;
+        margin: 20px 0;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .diploma-banner .diploma-organization {
+        font-size: 1.5em;
+        color: #aaaaaa;
+        margin-top: 10px;
+    }
+    
+    .diploma-banner .diploma-medal {
+        font-size: 5em;
+        margin-bottom: 20px;
+    }
+    
+    .diploma-banner .first-to-solve {
+        margin-top: 30px;
+        padding: 15px 25px;
+        background: rgba(40, 167, 69, 0.3);
+        border: 2px solid #28a745;
+        border-radius: 10px;
+        font-size: 1.3em;
+        color: #4ade80;
+        font-weight: 600;
+        display: inline-block;
+    }
+    
+    .diploma-banner .first-to-solve i {
+        color: #ffd700;
+    }
+
 </style>
 
-<div class="reveal-container">
+<!-- Toggle controls button -->
+<button class="toggle-controls-btn" onclick="toggleControls()" id="toggle-controls-btn">
+    <i class="bi bi-chevron-up"></i> Hide Controls
+</button>
+
+<div class="reveal-container" id="reveal-container">
     <div class="text-center mb-4">
         <h1 class="display-4 text-white">🏆 ICPC World Finals Style Reveal</h1>
         <p class="lead text-muted">Олимпиада: {{ olympiad_id }}</p>
@@ -343,12 +459,25 @@
     <button class="btn btn-dark mt-3" onclick="hideWinnerBanner()">Закрыть</button>
 </div>
 
+<!-- Diploma announcement banner -->
+<div class="diploma-banner" id="diploma-banner">
+    <div class="diploma-medal" id="diploma-medal"></div>
+    <div class="diploma-degree" id="diploma-degree"></div>
+    <div class="diploma-nickname" id="diploma-nickname"></div>
+    <div class="diploma-organization" id="diploma-organization"></div>
+    <div class="first-to-solve" id="diploma-first-solve" style="display: none;">
+        <i class="bi bi-lightning-fill"></i> <span id="first-solve-text"></span>
+    </div>
+</div>
+
 <script>
     // Data from server
     const frozenScoreboard = {{ frozen_scoreboard | tojson | safe }};
     const finalScoreboard = {{ final_scoreboard | tojson | safe }};
     const taskIds = [{% for task in tasks %}{{ task[0] }}{% if not loop.last %}, {% endif %}{% endfor %}];
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const firstSolvers = {{ first_solvers | tojson | safe }};
+    const winners = {{ winners | tojson | safe }};
     
     // State
     let currentBoard = JSON.parse(JSON.stringify(frozenScoreboard)); // Deep copy
@@ -523,7 +652,21 @@
             
             // Remove focus and re-render (with position changes)
             row.classList.remove('focus-row');
+            const previousRank = getCurrentRank(reveal.participant_id);
             renderScoreboard();
+            const newRank = getCurrentRank(reveal.participant_id);
+            
+            // Check if this participant earned a diploma and if there are no more reveals for them
+            const hasMoreReveals = revealQueue.some(r => r.participant_id === reveal.participant_id);
+            if (!hasMoreReveals && newRank <= 6) {
+                // Check if they earned a diploma
+                const diplomaInfo = getDiplomaForParticipant(reveal.participant_id);
+                if (diplomaInfo) {
+                    // Check if participant is first to solve this problem
+                    const isFirstToSolve = finalData.passed && firstSolvers[String(reveal.task_id)] === reveal.participant_id;
+                    await showDiplomaBanner(diplomaInfo, participant, reveal.task_id, isFirstToSolve);
+                }
+            }
         }
         
         isRevealing = false;
@@ -569,6 +712,72 @@
         document.getElementById('reveal-progress').textContent = '✓ Показаны итоговые результаты';
     }
     
+    // Helper: Get current rank of participant
+    function getCurrentRank(participantId) {
+        const sorted = [...currentBoard].sort((a, b) => {
+            if (b.total_score !== a.total_score) return b.total_score - a.total_score;
+            return a.total_penalty - b.total_penalty;
+        });
+        return sorted.findIndex(p => p.participant_id === participantId) + 1;
+    }
+    
+    // Helper: Get diploma info for participant based on rank
+    function getDiplomaForParticipant(participantId) {
+        const rank = getCurrentRank(participantId);
+        
+        // 1st place = First Degree Diploma (Gold)
+        if (rank === 1) {
+            return { degree: 'FIRST DEGREE DIPLOMA', medal: '🥇', place: 1 };
+        }
+        // 2nd and 3rd place = Second Degree Diploma (Silver)
+        else if (rank >= 2 && rank <= 3) {
+            return { degree: 'SECOND DEGREE DIPLOMA', medal: '🥈', place: 2 };
+        }
+        // 4th, 5th, 6th place = Third Degree Diploma (Bronze)
+        else if (rank >= 4 && rank <= 6) {
+            return { degree: 'THIRD DEGREE DIPLOMA', medal: '🥉', place: 3 };
+        }
+        
+        return null;
+    }
+    
+    // Show diploma banner with participant info
+    async function showDiplomaBanner(diplomaInfo, participant, taskId, isFirstToSolve) {
+        const overlay = document.getElementById('overlay');
+        const banner = document.getElementById('diploma-banner');
+        const medalEl = document.getElementById('diploma-medal');
+        const degreeEl = document.getElementById('diploma-degree');
+        const nicknameEl = document.getElementById('diploma-nickname');
+        const orgEl = document.getElementById('diploma-organization');
+        const firstSolveEl = document.getElementById('diploma-first-solve');
+        const firstSolveText = document.getElementById('first-solve-text');
+        
+        // Set diploma content
+        medalEl.textContent = diplomaInfo.medal;
+        degreeEl.textContent = diplomaInfo.degree;
+        nicknameEl.textContent = participant.nickname;
+        orgEl.textContent = participant.organization || '';
+        
+        // Show first to solve if applicable
+        if (isFirstToSolve) {
+            const taskIndex = taskIds.indexOf(taskId);
+            const problemLetter = letters[taskIndex];
+            firstSolveText.textContent = `FIRST TO SOLVE PROBLEM ${problemLetter}`;
+            firstSolveEl.style.display = 'inline-block';
+        } else {
+            firstSolveEl.style.display = 'none';
+        }
+        
+        // Show banner
+        overlay.style.display = 'block';
+        banner.style.display = 'block';
+        
+        // Auto-hide after 3 seconds
+        await sleep(3000);
+        overlay.style.display = 'none';
+        banner.style.display = 'none';
+    }
+    
     // Show winners announcement
     async function showWinners() {
         const response = await fetch(`/olympiad/api/winners/{{ olympiad_id }}`);
@@ -609,9 +818,9 @@
             else if (place === 3) medal.className = 'medal-bronze';
             
             const placeNames = {
-                1: '🥇 ПЕРВОЕ МЕСТО',
-                2: '🥈 ВТОРОЕ МЕСТО',
-                3: '🥉 ТРЕТЬЕ МЕСТО'
+                1: 'FIRST DEGREE DIPLOMA',
+                2: 'SECOND DEGREE DIPLOMA',
+                3: 'THIRD DEGREE DIPLOMA'
             };
             
             placeEl.textContent = placeNames[place];
@@ -653,6 +862,48 @@
         if (autoRevealInterval) {
             stopAutoReveal();
             startAutoReveal();
+        }
+    });
+    
+    // Toggle controls visibility
+    let controlsHidden = false;
+    function toggleControls() {
+        const controlPanel = document.querySelector('.control-panel');
+        const toggleBtn = document.getElementById('toggle-controls-btn');
+        const container = document.getElementById('reveal-container');
+        
+        controlsHidden = !controlsHidden;
+        
+        if (controlsHidden) {
+            controlPanel.classList.add('hidden');
+            toggleBtn.innerHTML = '<i class="bi bi-chevron-down"></i> Show Controls';
+            container.classList.add('fullscreen');
+        } else {
+            controlPanel.classList.remove('hidden');
+            toggleBtn.innerHTML = '<i class="bi bi-chevron-up"></i> Hide Controls';
+            container.classList.remove('fullscreen');
+        }
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Don't intercept keys if user is typing in an input
+        const activeElement = document.activeElement;
+        const isTyping = activeElement && (
+            activeElement.tagName === 'INPUT' || 
+            activeElement.tagName === 'TEXTAREA' ||
+            activeElement.isContentEditable
+        );
+        
+        if (e.key === 'h' || e.key === 'H') {
+            toggleControls();
+        } else if ((e.key === ' ' || e.key === 'ArrowRight') && !isTyping) {
+            e.preventDefault();
+            revealNext();
+        } else if (e.key === 'a' || e.key === 'A') {
+            startAutoReveal();
+        } else if (e.key === 's' || e.key === 'S') {
+            stopAutoReveal();
         }
     });
     

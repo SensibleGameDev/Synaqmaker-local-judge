@@ -1894,12 +1894,20 @@ def olympiad_reveal(olympiad_id):
     tasks = db_results['tasks']
     config = db_results['results']
     
+    # Get first solvers for each task
+    first_solvers = db.get_first_solvers(olympiad_id)
+    
+    # Get winners to determine diploma recipients
+    winners = _determine_winners(frozen_data['final_scoreboard'])
+    
     return render_template('olympiad_reveal.html',
                            olympiad_id=olympiad_id,
                            frozen_scoreboard=frozen_data['frozen_scoreboard'],
                            final_scoreboard=frozen_data['final_scoreboard'],
                            tasks=tasks,
                            config=config,
+                           first_solvers=first_solvers,
+                           winners=winners,
                            is_revealed=frozen_data['is_revealed'])
 
 @app.route('/olympiad/api/frozen_data/<olympiad_id>')
@@ -1959,44 +1967,50 @@ def api_export_frozen(olympiad_id):
 
 def _determine_winners(scoreboard):
     """
-    Determine 1st, 2nd, and 3rd place winners from scoreboard.
+    Determine diploma winners from scoreboard (ICPC World Finals style).
+    Awards exactly:
+    - 1 first place (gold diploma)
+    - 2 second places (silver diplomas)
+    - 3 third places (bronze diplomas)
     Returns dict with place numbers mapped to list of participants at that place.
-    Handles ties by giving same place to tied participants.
     """
     if not scoreboard:
         return {1: [], 2: [], 3: []}
     
     winners = {1: [], 2: [], 3: []}
-    current_place = 1
-    previous_score = None
-    previous_penalty = None
-    participants_at_current_place = 0
     
-    for i, participant in enumerate(scoreboard):
-        score = participant.get('total_score', 0)
-        penalty = participant.get('total_penalty', 0)
-        
-        if previous_score is not None:
-            # Check if this participant has a worse score/penalty
-            if score < previous_score or (score == previous_score and penalty > previous_penalty):
-                current_place += participants_at_current_place
-                participants_at_current_place = 0
-        
-        if current_place <= 3:
-            winners[current_place].append({
-                'nickname': participant.get('nickname'),
-                'organization': participant.get('organization'),
-                'total_score': score,
-                'total_penalty': penalty,
-                'participant_id': participant.get('participant_id')
-            })
-            participants_at_current_place += 1
-        
-        previous_score = score
-        previous_penalty = penalty
-        
-        if current_place > 3:
-            break
+    # Award exactly 1 gold diploma (1st place)
+    if len(scoreboard) >= 1:
+        participant = scoreboard[0]
+        winners[1].append({
+            'nickname': participant.get('nickname'),
+            'organization': participant.get('organization'),
+            'total_score': participant.get('total_score', 0),
+            'total_penalty': participant.get('total_penalty', 0),
+            'participant_id': participant.get('participant_id')
+        })
+    
+    # Award exactly 2 silver diplomas (2nd and 3rd place)
+    for i in range(1, min(3, len(scoreboard))):
+        participant = scoreboard[i]
+        winners[2].append({
+            'nickname': participant.get('nickname'),
+            'organization': participant.get('organization'),
+            'total_score': participant.get('total_score', 0),
+            'total_penalty': participant.get('total_penalty', 0),
+            'participant_id': participant.get('participant_id')
+        })
+    
+    # Award exactly 3 bronze diplomas (4th, 5th, 6th place)
+    for i in range(3, min(6, len(scoreboard))):
+        participant = scoreboard[i]
+        winners[3].append({
+            'nickname': participant.get('nickname'),
+            'organization': participant.get('organization'),
+            'total_score': participant.get('total_score', 0),
+            'total_penalty': participant.get('total_penalty', 0),
+            'participant_id': participant.get('participant_id')
+        })
     
     return winners
 
@@ -2020,9 +2034,9 @@ def api_get_winners(olympiad_id):
         'olympiad_id': olympiad_id,
         'winners': winners,
         'places': {
-            1: 'Первое место (Золото)',
-            2: 'Второе место (Серебро)', 
-            3: 'Третье место (Бронза)'
+            1: 'FIRST DEGREE DIPLOMA',
+            2: 'SECOND DEGREE DIPLOMA', 
+            3: 'THIRD DEGREE DIPLOMA'
         }
     })
 

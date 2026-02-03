@@ -195,7 +195,7 @@ def _compute_scoreboard(oly):
                 normalized_scores[str_key] = {'score': 0, 'attempts': 0, 'passed': False, 'penalty': 0}
 
         if scoring_mode == 'icpc':
-            # Fix: In ICPC mode, total_score should count solved problems (0 or 1 per task), not sum of scores
+            # Fix: In ICPC mode, total_score should count solved problems (number of problems with passed=True)
             total_score = sum(1 for s in normalized_scores.values() if s.get('passed'))
             total_penalty = sum(s.get('penalty', 0) for s in normalized_scores.values() if s.get('passed'))
         else:

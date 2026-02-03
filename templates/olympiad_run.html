@@ -142,6 +142,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+        <div id="frozen-badge-container"></div>
         <div id="scoreboard-loader" class="text-center py-5">
             <div class="spinner-border text-primary" role="status"></div>
         </div>
@@ -288,13 +289,15 @@
             const isICPC = data.config.scoring === 'icpc';
             const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
             
-            // Show frozen badge if applicable
-            let frozenBadge = '';
+            // Show frozen badge if applicable (in separate container)
+            const frozenBadgeContainer = document.getElementById('frozen-badge-container');
             if (data.is_frozen) {
-                frozenBadge = '<div class="alert alert-warning mb-2"><i class="bi bi-snow"></i> <strong>Таблица заморожена!</strong> Результаты после заморозки скрыты (отмечены знаком "?").</div>';
+                frozenBadgeContainer.innerHTML = '<div class="alert alert-warning mb-2"><i class="bi bi-snow"></i> <strong>Таблица заморожена!</strong> Результаты после заморозки скрыты (отмечены знаком "?").</div>';
+            } else {
+                frozenBadgeContainer.innerHTML = '';
             }
             
-            let headerHtml = frozenBadge + '<thead class="table-dark"><tr><th>#</th><th>Участник</th>';
+            let headerHtml = '<thead class="table-dark"><tr><th>#</th><th>Участник</th>';
             let taskCount = 0;
             if (data.config.task_ids) taskCount = data.config.task_ids.length;
             else if (data.scoreboard.length) taskCount = Object.keys(data.scoreboard[0].scores).length;

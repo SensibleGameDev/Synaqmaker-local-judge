@@ -774,7 +774,8 @@ def olympiad_submit(olympiad_id):
             return jsonify({'error': 'Олимпиада завершена.'}), 400
         
         # [FIX Issue 5] Check if task is already fully solved (all tests passed)
-        task_score = p_data.get('scores', {}).get(task_id) or p_data.get('scores', {}).get(str(task_id))
+        scores = p_data.get('scores', {})
+        task_score = scores.get(task_id) or scores.get(str(task_id))
         if task_score and task_score.get('passed', False):
             return jsonify({'error': 'Эта задача уже решена. Нельзя отправлять дополнительные решения.'}), 400
         
@@ -1205,7 +1206,7 @@ def olympiad_end(olympiad_id):
     has_frozen_data = frozen_data is not None
     
     # [FIX Issue 3] For non-organizers, show frozen data if available and not yet revealed
-    use_frozen_for_display = has_frozen_data and not is_organizer and frozen_data and not frozen_data.get('is_revealed', False)
+    use_frozen_for_display = has_frozen_data and not is_organizer and not frozen_data.get('is_revealed', False)
 
     if results_copy:
         results = results_copy

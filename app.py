@@ -338,8 +338,11 @@ def process_single_submission(item):
         task_info = db.get_task_details(task_id)
         checker_code = None
         if task_info:
-            try: checker_code = task_info['checker_code']
-            except: pass
+            try: 
+                checker_code = task_info['checker_code']
+            except (KeyError, TypeError):
+                # checker_code field may not exist in older tasks
+                pass
 
         test_data_list = []
 
@@ -610,8 +613,11 @@ def run_code_submission():
     task_info = db.get_task_details(task_id)
     checker_code = None
     if task_info:
-        try: checker_code = task_info['checker_code']
-        except: pass
+        try: 
+            checker_code = task_info['checker_code']
+        except (KeyError, TypeError):
+            # checker_code field may not exist in older tasks
+            pass
 
     test_data_list = []
 

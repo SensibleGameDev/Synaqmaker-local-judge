@@ -3,6 +3,21 @@ import os
 import json
 import subprocess
 
+# Import shared utilities
+try:
+    from judge_utils import get_tokens, compare_outputs, check_verdict_with_checker
+    HAS_JUDGE_UTILS = True
+except ImportError:
+    HAS_JUDGE_UTILS = False
+    # Fallback implementation if judge_utils is not available
+    def get_tokens(text):
+        if not text:
+            return []
+        return text.strip().split()
+    
+    def compare_outputs(user_output, expected_output):
+        return get_tokens(user_output) == get_tokens(expected_output)
+
 # [FIX] Добавляем поддержку кастомного чекера
 try:
     import checker
@@ -58,7 +73,8 @@ def run_judge():
         
         try:
             time_limit = float(test.get('limit', 1.0))
-        except:
+        except (ValueError, TypeError):
+            # Fallback to default if invalid time limit
             time_limit = 1.0
         
         cmd_timeout = time_limit
@@ -86,22 +102,28 @@ def run_judge():
             else:
                 # [FIX] Логика проверки ответа (Чекер или Стандарт)
                 if HAS_CHECKER:
-                    try:
-                        # Импортируем tools для перехвата stdout чекера, 
-                        # чтобы его принты не ломали JSON
-                        import io
-                        from contextlib import redirect_stdout
-                        
-                        f_dummy = io.StringIO()
-                        with redirect_stdout(f_dummy):
-                            is_ok = checker.check(test_input, output, expected_output)
-                        verdict = "Accepted" if is_ok else "Wrong Answer"
-                    except Exception as check_err:
-                        verdict = "Judge Error"
-                        error += f"\nChecker failed: {check_err}"
+                    if HAS_JUDGE_UTILS:
+                        verdict, checker_error = check_verdict_with_checker(
+                            checker, test_input, output, expected_output
+                        )
+                        if checker_error:
+                            error += checker_error
+                    else:
+                        # Fallback to original implementation
+                        try:
+                            import io
+                            from contextlib import redirect_stdout
+                            
+                            f_dummy = io.StringIO()
+                            with redirect_stdout(f_dummy):
+                                is_ok = checker.check(test_input, output, expected_output)
+                            verdict = "Accepted" if is_ok else "Wrong Answer"
+                        except Exception as check_err:
+                            verdict = "Judge Error"
+                            error += f"\nChecker failed: {check_err}"
                 else:
                     # Стандартное сравнение (игнорируя пробелы)
-                    if output.strip().split() == expected_output.strip().split():
+                    if compare_outputs(output, expected_output):
                         verdict = "Accepted"
                     else:
                         verdict = "Wrong Answer"

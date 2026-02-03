@@ -455,7 +455,9 @@ class DBManager:
                     conn.execute("DELETE FROM olympiad_history WHERE olympiad_id = ?", (olympiad_id,))
                     conn.commit()
                 return True
-            except: return False
+            except sqlite3.Error as e:
+                print(f"DB Error: Failed to delete olympiad history for {olympiad_id}: {e}")
+                return False
         
     def get_whitelist_for_olympiad(self, olympiad_id):
         with self._get_conn() as conn:
@@ -829,8 +831,10 @@ def _run_batch(code, test_data_list, language, judge_script_filename, docker_ima
 
         try:
             return json.loads(output), None
-        except:
-            return None, f"System Error (JSON): {output} | Err: {err}"
+        except (json.JSONDecodeError, ValueError) as e:
+            err_preview = str(e)[:100] + ("..." if len(str(e)) > 100 else "")
+            out_preview = output[:200] + ("..." if len(output) > 200 else "")
+            return None, f"System Error (JSON parse failed): {err_preview} | Output: {out_preview}"
 
     except subprocess.TimeoutExpired: return None, "Time Limit Exceeded (Overall)"
     except Exception as e: return None, f"Execution error: {str(e)}"

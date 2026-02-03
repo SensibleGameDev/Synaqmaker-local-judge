@@ -64,13 +64,15 @@ def cleanup_zombies():
     try:
         images = ["testirovschik-python", "testirovschik-cpp", "testirovschik-csharp"]
         for img in images:
-            cmd = f'docker ps -a -q --filter ancestor={img}'
+            # Fixed: Use list args instead of shell=True to prevent injection
             try:
                 # Получаем ID контейнеров
-                output = subprocess.check_output(cmd, shell=True).decode().strip()
+                output = subprocess.check_output(
+                    ['docker', 'ps', '-a', '-q', '--filter', f'ancestor={img}']
+                ).decode().strip()
                 if output:
                     container_ids = output.split()
-                    subprocess.run(f'docker rm -f {" ".join(container_ids)}', shell=True, check=False)
+                    subprocess.run(['docker', 'rm', '-f'] + container_ids, check=False)
                     log.info(f"Удалены зомби-контейнеры для {img}: {len(container_ids)} шт.")
             except Exception:
                 pass

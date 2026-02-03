@@ -432,7 +432,8 @@
                         else el.innerHTML = `<span class="text-secondary">-</span>`;
                     } else {
                         if (hasFrozenActivity) {
-                            el.innerHTML = `<span class="text-warning">?${frozenS.attempts || 0}</span>`;
+                            const attemptCount = frozenS.attempts ?? '';
+                            el.innerHTML = `<span class="text-warning">?${attemptCount}</span>`;
                         } else {
                             el.innerHTML = s.score;
                             if (s.passed) el.className = 'fw-bold text-success';

@@ -121,6 +121,7 @@ def _get_olympiad_state(olympiad_id):
                     # Save frozen scoreboard snapshot once when freeze is first triggered
                     if not oly.get('freeze_triggered', False):
                         oly['freeze_triggered'] = True
+                        oly['freeze_time'] = time.time()  # Record when freeze happened
                         # Compute and save the frozen scoreboard
                         frozen_board = _compute_scoreboard(oly)
                         oly['frozen_scoreboard'] = frozen_board
@@ -1346,7 +1347,8 @@ def olympiad_finish_by_host(olympiad_id):
             if freeze_minutes > 0 and oly_data_to_save.get('frozen_scoreboard'):
                 frozen_scoreboard = oly_data_to_save['frozen_scoreboard']
                 final_scoreboard = _compute_scoreboard(oly_data_to_save)
-                freeze_time = time.time()
+                # Use the actual freeze time when it was triggered, not current time
+                freeze_time = oly_data_to_save.get('freeze_time', time.time())
             
             session.pop(f'is_organizer_for_{olympiad_id}', None)
             del olympiads[olympiad_id] 

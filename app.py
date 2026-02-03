@@ -1078,7 +1078,7 @@ def olympiad_create():
             }
 
             olympiads[olympiad_id] = {
-                'olympiad_id': olympiad_id,  # Add olympiad_id for freeze reconstruction
+                'olympiad_id': olympiad_id,
                 'status': status,
                 'name': name,
                 'task_ids': tasks_ordered,

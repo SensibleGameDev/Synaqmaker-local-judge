@@ -726,6 +726,37 @@ class DBManager:
                 conn.execute("UPDATE olympiad_frozen_data SET is_revealed = 1 WHERE olympiad_id = ?", (olympiad_id,))
                 conn.commit()
 
+    def get_submissions_during_freeze(self, olympiad_id, freeze_time):
+        """
+        Get all submissions made after the freeze time for ICPC-style unfreeze log.
+        Returns submissions sorted by timestamp ASC.
+        """
+        with self._get_conn() as conn:
+            c = conn.cursor()
+            c.execute("""
+                SELECT h.participant_id, h.task_id, h.verdict, h.timestamp, 
+                       h.tests_passed, h.total_tests, r.nickname
+                FROM olympiad_history h
+                LEFT JOIN olympiad_results r ON h.participant_id = r.participant_uuid 
+                    AND h.olympiad_id = r.olympiad_id
+                WHERE h.olympiad_id = ? AND h.timestamp >= ?
+                ORDER BY h.timestamp ASC
+            """, (olympiad_id, freeze_time))
+            rows = c.fetchall()
+            
+            submissions = []
+            for row in rows:
+                submissions.append({
+                    'participant_id': row['participant_id'],
+                    'task_id': row['task_id'],
+                    'verdict': row['verdict'],
+                    'timestamp': row['timestamp'],
+                    'tests_passed': row['tests_passed'],
+                    'total_tests': row['total_tests'],
+                    'nickname': row['nickname'] if row['nickname'] else 'Unknown'
+                })
+            return submissions
+
     def get_freeze_minutes(self, olympiad_id):
         """Get freeze minutes setting for olympiad"""
         with self._get_conn() as conn:

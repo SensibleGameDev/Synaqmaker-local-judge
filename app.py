@@ -166,6 +166,7 @@ def _get_olympiad_state(olympiad_id):
                         }
                     else:
                         # Participant not in live scoreboard (shouldn't happen normally)
+                        # Copy frozen data and add explicit frozen_* fields for templates
                         display_p = frozen_p.copy()
                         display_p['frozen_scores'] = frozen_p['scores']
                         display_p['frozen_total_score'] = frozen_p['total_score']
@@ -231,6 +232,7 @@ def _get_olympiad_state(olympiad_id):
                     }
                 else:
                     # Participant not in live scoreboard (shouldn't happen normally)
+                    # Copy frozen data and add explicit frozen_* fields for templates
                     display_p = frozen_p.copy()
                     display_p['frozen_scores'] = frozen_p['scores']
                     display_p['frozen_total_score'] = frozen_p['total_score']

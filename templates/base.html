@@ -97,7 +97,7 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {% if 'presentation' in request.path %}active{% endif %}" href="#" onclick="showPresentationHelp()">
+        <a class="nav-link {% if 'presentation' in request.path %}active{% endif %}" href="#" data-bs-toggle="modal" data-bs-target="#presentationHelpModal">
             <i class="bi bi-display"></i> Презентация
         </a>
     </li>
@@ -141,6 +141,41 @@
         <p>&copy;Synaqmaker local judge (c) Copyright 2025-2026 Дулат Акбулатов </p>
         <p>Версия сборки v1.0.6</p>
     </footer>
+    
+    <!-- Presentation Help Modal -->
+    <div class="modal fade" id="presentationHelpModal" tabindex="-1" aria-labelledby="presentationHelpModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="presentationHelpModalLabel">
+                        <i class="bi bi-display"></i> Режим Презентации
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Чтобы открыть режим презентации:</p>
+                    <ol>
+                        <li>Перейдите в <strong>Архив</strong></li>
+                        <li>Выберите завершенную олимпиаду</li>
+                        <li>Нажмите кнопку <strong>"Presentation Mode"</strong> или <strong>"Reveal"</strong></li>
+                    </ol>
+                    <div class="alert alert-info mt-3" role="alert">
+                        <i class="bi bi-info-circle"></i> Режим презентации доступен для олимпиад с активированной заморозкой.
+                    </div>
+                    <p><strong>Горячие клавиши в режиме Reveal:</strong></p>
+                    <ul>
+                        <li><kbd>H</kbd> - Скрыть/показать панель управления</li>
+                        <li><kbd>Space</kbd> / <kbd>→</kbd> - Раскрыть следующую посылку</li>
+                        <li><kbd>A</kbd> - Запустить автоматическое раскрытие</li>
+                        <li><kbd>S</kbd> - Остановить автоматическое раскрытие</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Понятно</button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     
     <script>
@@ -194,12 +229,6 @@
     <script src="{{ url_for('static', filename='js/matchbrackets.min.js') }}"></script>
 
     <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
-    
-    <script>
-    function showPresentationHelp() {
-        alert('Чтобы открыть режим презентации:\n\n1. Перейдите в Архив\n2. Выберите завершенную олимпиаду\n3. Нажмите кнопку "Presentation Mode" или "Reveal"\n\nРежим презентации доступен для олимпиад с активированной заморозкой.');
-    }
-    </script>
     
     {% block scripts %}{% endblock %}
 

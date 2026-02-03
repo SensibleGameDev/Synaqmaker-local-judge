@@ -218,7 +218,7 @@ def _compute_scoreboard(oly):
     
     return scoreboard
 
-@app.socketio.on('join_room')
+@socketio.on('join_room')
 def handle_join_room(data):
     room = data.get('room')
     role = data.get('role')

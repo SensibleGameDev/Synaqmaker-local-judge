@@ -279,8 +279,8 @@
                     if (hasFrozenActivity) {
                         // Show frozen state with orange color and "?" indicator
                         cellClass = 'frozen-cell';
-                        const attemptCount = frozenTaskData.attempts ?? '';
-                        cellContent = `?${attemptCount}`;
+                        const attemptDisplay = frozenTaskData.attempts ?? '';
+                        cellContent = `?${attemptDisplay}`;
                     } else if (taskData.passed) {
                         cellClass = 'bg-success text-white border-success';
                         cellContent = `+${taskData.attempts > 0 ? taskData.attempts : ''}<br><small style="font-size:0.7em">${taskData.penalty}</small>`;
@@ -295,8 +295,8 @@
                 // Points
                 if (hasFrozenActivity) {
                     cellClass = 'frozen-cell';
-                    const attemptCount = frozenTaskData.attempts ?? '';
-                    cellContent = `?${attemptCount}`;
+                    const attemptDisplay = frozenTaskData.attempts ?? '';
+                    cellContent = `?${attemptDisplay}`;
                 } else if (taskData.score > 0) {
                     cellClass = taskData.score === 100 ? 'bg-success text-white' : 'text-warning';
                     cellContent = taskData.score;

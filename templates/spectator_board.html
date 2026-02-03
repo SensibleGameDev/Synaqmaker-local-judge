@@ -273,10 +273,8 @@
                     if (hasFrozenActivity) {
                         // Show frozen state with orange color and "?" indicator
                         cellClass = 'bg-warning text-dark border-warning';
-                        const displayAttempts = frozenTaskData.passed ? 
-                            `+${frozenTaskData.attempts > 0 ? frozenTaskData.attempts : ''}` :
-                            (frozenTaskData.attempts > 0 ? `-${frozenTaskData.attempts}` : '');
-                        cellContent = `${displayAttempts}?`;
+                        const displayAttempts = frozenTaskData.attempts || 0;
+                        cellContent = `?${displayAttempts}`;
                     } else if (taskData.passed) {
                         cellClass = 'bg-success text-white border-success';
                         cellContent = `+${taskData.attempts > 0 ? taskData.attempts : ''}<br><small style="font-size:0.7em">${taskData.penalty}</small>`;
@@ -287,22 +285,18 @@
                         cellClass = 'bg-danger text-white border-danger';
                         cellContent = `-${taskData.attempts}`;
                     }
-                } else {
-                    // Points
-                    if (hasFrozenActivity) {
-                        // Show frozen state with orange color and "?" indicator
-                        cellClass = 'bg-warning text-dark border-warning';
-                        cellContent = `${frozenTaskData.score}?`;
-                    } else if (taskData.score > 0) {
-                        cellClass = taskData.score === 100 ? 'bg-success text-white' : 'text-warning';
-                        cellContent = taskData.score;
-                        
-                        if (isFirstSolver && taskData.score === 100) cellClass += ' first-to-solve';
-                    } else if (taskData.attempts > 0) {
-                        cellContent = '0';
-                        cellClass = 'text-danger';
-                    }
+            } else {
+                // Points
+                if (taskData.score > 0) {
+                    cellClass = taskData.score === 100 ? 'bg-success text-white' : 'text-warning';
+                    cellContent = taskData.score;
+                    
+                    if (isFirstSolver && taskData.score === 100) cellClass += ' first-to-solve';
+                } else if (taskData.attempts > 0) {
+                    cellContent = '0';
+                    cellClass = 'text-danger';
                 }
+            }
                 tasksHtml += `<td class="text-center cell-score ${cellClass}">${cellContent}</td>`;
             });
 

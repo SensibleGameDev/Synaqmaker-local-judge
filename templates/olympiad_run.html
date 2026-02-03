@@ -331,10 +331,8 @@
                         if (hasFrozenActivity) {
                             // Show frozen state with orange color and "?" indicator
                             cellClass = 'table-warning';
-                            const displayAttempts = frozenS.passed ? 
-                                `+${frozenS.attempts > 0 ? frozenS.attempts : ''}` :
-                                (frozenS.attempts > 0 ? `-${frozenS.attempts}` : '');
-                            cellContent = `<span class="text-dark fw-bold">${displayAttempts}?</span>`;
+                            const displayAttempts = frozenS.attempts || 0;
+                            cellContent = `<span class="text-dark fw-bold">?${displayAttempts}</span>`;
                         } else if (s.passed) {
                             cellContent = `<span class="text-success fw-bold">+${s.attempts > 0 ? s.attempts : ''}</span><br><small class="text-muted">${s.penalty}</small>`;
                             cellClass = 'table-success';
@@ -342,15 +340,9 @@
                             cellContent = `<span class="text-danger">-${s.attempts}</span>`;
                         }
                     } else {
-                        if (hasFrozenActivity) {
-                            // Show frozen state with orange color and "?" indicator
-                            cellClass = 'table-warning';
-                            cellContent = `<span class="text-dark fw-bold">${frozenS.score}?</span>`;
-                        } else {
-                            cellContent = s.score;
-                            if (s.passed) cellClass = 'table-success fw-bold';
-                            else if (s.score > 0) cellClass = 'table-warning';
-                        }
+                        cellContent = s.score;
+                        if (s.passed) cellClass = 'table-success fw-bold';
+                        else if (s.score > 0) cellClass = 'table-warning';
                     }
                     rowHtml += `<td class="${cellClass}">${cellContent}</td>`;
                 });
@@ -410,16 +402,26 @@
             // Обновляем Header (Решено/Штраф)
             if (scoringMode === 'icpc') {
                 const totalScoreEl = document.getElementById('icpc-total-score');
-                if (totalScoreEl) totalScoreEl.innerHTML = `Решено: <strong>${me.total_score}</strong> | Штраф: <strong>${me.total_penalty}</strong>`;
+                const displayScore = data.is_frozen && me.frozen_total_score !== undefined ? me.frozen_total_score : me.total_score;
+                const displayPenalty = data.is_frozen && me.frozen_total_penalty !== undefined ? me.frozen_total_penalty : me.total_penalty;
+                if (totalScoreEl) totalScoreEl.innerHTML = `Решено: <strong>${displayScore}</strong> | Штраф: <strong>${displayPenalty}</strong>`;
             }
             // Обновляем мини-блоки задач
             for (const taskId in me.scores) {
                 const s = me.scores[taskId];
+                const frozenS = me.frozen_scores ? (me.frozen_scores[taskId] || s) : s;
+                const hasFrozenActivity = data.is_frozen && me.frozen_scores &&
+                    (s.attempts !== frozenS.attempts || s.passed !== frozenS.passed);
                 const el = document.getElementById(`score-block-${taskId}`);
                 if (el) {
                     if (scoringMode === 'icpc') {
-                        if (s.passed) el.innerHTML = `<span class="text-success">+${s.attempts > 0 ? s.attempts : ''}</span>`;
-                        else if (s.attempts > 0) el.innerHTML = `<span class="text-danger">-${s.attempts}</span>`;
+                        if (hasFrozenActivity) {
+                            el.innerHTML = `<span class="text-warning">?${frozenS.attempts || 0}</span>`;
+                        } else if (s.passed) {
+                            el.innerHTML = `<span class="text-success">+${s.attempts > 0 ? s.attempts : ''}</span>`;
+                        } else if (s.attempts > 0) {
+                            el.innerHTML = `<span class="text-danger">-${s.attempts}</span>`;
+                        }
                         else el.innerHTML = `<span class="text-secondary">-</span>`;
                     } else {
                         el.innerHTML = s.score;

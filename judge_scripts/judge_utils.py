@@ -67,7 +67,7 @@ def check_verdict_with_checker(checker_module, test_input, user_output, expected
         return "Judge Error", f"\nChecker failed: {check_err}"
 
 
-def determine_verdict(return_code, user_output, expected_output, checker_module=None):
+def determine_verdict(return_code, user_output, expected_output, test_input="", checker_module=None):
     """
     Determine verdict based on return code and output comparison.
     
@@ -75,6 +75,7 @@ def determine_verdict(return_code, user_output, expected_output, checker_module=
         return_code: Process return code (124 = timeout, != 0 = runtime error)
         user_output: Output from user's program
         expected_output: Expected output from test case
+        test_input: Input data for the test (required for custom checkers)
         checker_module: Optional custom checker module
         
     Returns:
@@ -88,7 +89,7 @@ def determine_verdict(return_code, user_output, expected_output, checker_module=
         # Check output correctness
         if checker_module:
             return check_verdict_with_checker(
-                checker_module, "", user_output, expected_output
+                checker_module, test_input, user_output, expected_output
             )
         else:
             if compare_outputs(user_output, expected_output):

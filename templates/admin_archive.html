@@ -17,6 +17,7 @@
                     <tr>
                         <th>ID Олимпиады</th>
                         <th>Участников</th>
+                        <th class="text-center">Заморозка</th>
                         <th class="text-end">Действия</th>
                     </tr>
                 </thead>
@@ -25,6 +26,13 @@
                     <tr>
                         <td><kbd>{{ oly[0] }}</kbd></td>
                         <td><span class="badge bg-info text-dark">{{ oly[1] }}</span></td>
+                        <td class="text-center">
+                            {% if oly[4] %}
+                                <span class="badge bg-primary">Freeze {{ oly[4] }} мин</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Без заморозки</span>
+                            {% endif %}
+                        </td>
                         <td class="text-end">
                             <a href="{{ url_for('admin_archive_view', olympiad_id=oly[0]) }}" class="btn btn-sm btn-primary me-2">
                                 <i class="bi bi-eye"></i> Просмотр
@@ -32,6 +40,11 @@
                             <a href="{{ url_for('admin_archive_export', olympiad_id=oly[0]) }}" class="btn btn-sm btn-success me-2">
                                 <i class="bi bi-file-earmark-excel"></i> Excel
                             </a>
+                            {% if (oly[4] and oly[4] > 0) or oly[5] %}
+                            <a href="{{ url_for('olympiad_reveal', olympiad_id=oly[0]) }}" class="btn btn-sm btn-warning me-2">
+                                <i class="bi bi-snow"></i> Разморозка
+                            </a>
+                            {% endif %}
                             <form action="{{ url_for('admin_archive_delete', olympiad_id=oly[0]) }}" method="POST" class="d-inline" onsubmit="return confirm('Удалить результаты этой олимпиады навсегда?');">
                                 <button type="submit" class="btn btn-sm btn-outline-danger">
                                     <i class="bi bi-trash"></i>

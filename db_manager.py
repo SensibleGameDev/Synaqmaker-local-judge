@@ -434,9 +434,15 @@ class DBManager:
         with self._get_conn() as conn:
             c = conn.cursor()
             c.execute("""
-                SELECT r.olympiad_id, COUNT(r.id) as participants_count, c.name, c.status
+                SELECT r.olympiad_id,
+                       COUNT(r.id) as participants_count,
+                       c.name,
+                       c.status,
+                       c.freeze_minutes,
+                       CASE WHEN f.freeze_time IS NOT NULL THEN 1 ELSE 0 END as has_frozen_data
                 FROM olympiad_results r
                 LEFT JOIN olympiad_configs c ON r.olympiad_id = c.olympiad_id
+                LEFT JOIN olympiad_frozen_data f ON r.olympiad_id = f.olympiad_id
                 GROUP BY r.olympiad_id 
                 ORDER BY r.id DESC
             """)

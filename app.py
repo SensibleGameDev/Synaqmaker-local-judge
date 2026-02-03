@@ -1,4 +1,3 @@
-from anyio import current_time
 from gevent import monkey
 monkey.patch_all()
 import io
@@ -700,10 +699,35 @@ def run_code_submission():
 def olympiad_submit(olympiad_id):
     participant_id = session.get('participant_id')
     nickname = session.get('nickname')
-    data = request.json
-    task_id = int(data['task_id'])
-    language = data['language']
-    code = data['code']
+    
+    # BUG FIX: Validate JSON data exists and has required fields
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'Данные не переданы.'}), 400
+        
+        # Validate and convert task_id
+        task_id_raw = data.get('task_id')
+        if task_id_raw is None:
+            return jsonify({'error': 'Поле task_id обязательно.'}), 400
+        
+        try:
+            task_id = int(task_id_raw)
+            if task_id <= 0:
+                return jsonify({'error': 'task_id должен быть положительным числом.'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'error': 'task_id должен быть числом.'}), 400
+        
+        language = data.get('language', '').strip()
+        code = data.get('code', '').strip()
+        
+        if not language:
+            return jsonify({'error': 'Поле language обязательно.'}), 400
+        if not code:
+            return jsonify({'error': 'Код не может быть пустым.'}), 400
+            
+    except Exception as e:
+        return jsonify({'error': f'Ошибка обработки запроса: {str(e)}'}), 400
     
     with olympiad_lock: 
         if olympiad_id not in olympiads or not participant_id:
@@ -725,7 +749,8 @@ def olympiad_submit(olympiad_id):
         if p_data.get('finished_early'): 
             return jsonify({'error': 'Олимпиада завершена.'}), 400
         
-        if oly.get('start_time'):
+        # BUG FIX: Validate start_time exists before using it
+        if oly.get('start_time') and oly['start_time'] is not None:
             elapsed = time.time() - oly['start_time']
             if elapsed > oly['config']['duration_minutes'] * 60:
                 return jsonify({'error': 'Время вышло!'}), 400
@@ -767,15 +792,50 @@ def olympiad_submit(olympiad_id):
 @admin_required
 def olympiad_create():
     if request.method == 'POST':
-        task_ids = request.form.getlist('task_ids')
-        duration = int(request.form.get('duration'))
-        scoring = request.form.get('scoring')
-        mode = request.form.get('mode')
-        name = request.form.get('name', 'Olympiad')
-        start_time_str = request.form.get('start_time_local')
-        allowed_languages = request.form.getlist('allowed_languages')
-        freeze_minutes_str = request.form.get('freeze_minutes', '0')
-        freeze_minutes = int(freeze_minutes_str) if freeze_minutes_str else 0
+        # BUG FIX: Validate form data with proper error handling
+        try:
+            task_ids = request.form.getlist('task_ids')
+            
+            # Validate and convert duration
+            duration_raw = request.form.get('duration', '0')
+            try:
+                duration = int(duration_raw)
+            except (ValueError, TypeError):
+                flash('Длительность должна быть числом.', 'danger')
+                return redirect(url_for('olympiad_create'))
+            
+            scoring = request.form.get('scoring', 'all_or_nothing')
+            mode = request.form.get('mode', 'free')
+            name = request.form.get('name', 'Olympiad').strip()
+            
+            # Validate name is not empty after stripping
+            if not name:
+                name = 'Olympiad'  # Fallback to default if empty
+            
+            start_time_str = request.form.get('start_time_local', '').strip()
+            allowed_languages = request.form.getlist('allowed_languages')
+            
+            # Validate and convert freeze_minutes
+            freeze_minutes_str = request.form.get('freeze_minutes', '0').strip()
+            try:
+                freeze_minutes = int(freeze_minutes_str) if freeze_minutes_str else 0
+            except (ValueError, TypeError):
+                flash('Время заморозки должно быть числом.', 'danger')
+                return redirect(url_for('olympiad_create'))
+            
+            # Validate duration
+            if not (1 <= duration <= 1440):  # Max 24 hours
+                flash('Длительность должна быть от 1 до 1440 минут (24 часа).', 'danger')
+                return redirect(url_for('olympiad_create'))
+            
+            # Validate freeze minutes
+            if not (0 <= freeze_minutes <= duration):
+                flash('Время заморозки не может превышать длительность олимпиады.', 'danger')
+                return redirect(url_for('olympiad_create'))
+            
+        except Exception as e:
+            flash(f'Ошибка в данных формы: {str(e)}', 'danger')
+            return redirect(url_for('olympiad_create'))
         
         # Default to all languages if none selected
         if not allowed_languages:
@@ -1121,10 +1181,11 @@ def olympiad_end(olympiad_id):
             total_penalty = 0
             
             if scoring_mode == 'icpc':
-                total_score = sum(s['score'] for s in p_data['scores'].values()) # Кол-во решенных
-                total_penalty = sum(s['penalty'] for s in p_data['scores'].values() if s['passed'])
+                # BUG FIX: Validate score dict has required keys before accessing
+                total_score = sum(s.get('score', 0) for s in p_data['scores'].values())
+                total_penalty = sum(s.get('penalty', 0) for s in p_data['scores'].values() if s.get('passed', False))
             else:
-                total_score = sum(s['score'] for s in p_data['scores'].values()) # Сумма баллов
+                total_score = sum(s.get('score', 0) for s in p_data['scores'].values())
 
 
             normalized_scores = {str(k): v for k, v in p_data['scores'].items()}

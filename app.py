@@ -1,4 +1,3 @@
-from anyio import current_time
 from gevent import monkey
 monkey.patch_all()
 import io

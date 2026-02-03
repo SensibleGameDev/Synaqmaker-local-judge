@@ -554,7 +554,7 @@ def _handle_worker_error(olympiad_id, participant_id, task_id, error_msg):
 @app.route('/')
 def index():
     if not session.get('is_admin'):
-        return redirect(url_for('olympiad_index'))
+        return redirect(url_for('olympiad_join'))
     tasks = db.get_tasks()
     return render_template('index.html', tasks=tasks)
 
@@ -1834,7 +1834,7 @@ def restore_state_on_startup():
 def olympiad_edit_time(olympiad_id):
     new_time_str = request.form.get('new_time')
     if not new_time_str:
-        return redirect(url_for('olympiad_index'))
+        return redirect(url_for('olympiad_join'))
     
     with olympiad_lock:
         if olympiad_id in olympiads:
@@ -1851,7 +1851,7 @@ def olympiad_edit_time(olympiad_id):
                 flash('Время старта обновлено.', 'success')
             except ValueError:
                 flash('Ошибка формата времени', 'danger')
-    return redirect(url_for('olympiad_index'))
+    return redirect(url_for('olympiad_join'))
 
 @app.route('/olympiad/print_cards/<olympiad_id>')
 @admin_required

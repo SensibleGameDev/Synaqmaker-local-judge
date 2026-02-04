@@ -322,19 +322,17 @@
                 const taskIds = data.config.task_ids || Object.keys(p.scores);
                 taskIds.forEach(tid => {
                     let s = p.scores[tid] || {score:0, passed:false, attempts:0, penalty:0};
-                    let frozenS = p.frozen_scores?.[tid] ?? null;
                     let cellContent = '.';
                     let cellClass = '';
                     
-                    // Check if there's frozen activity (changes during freeze)
-                    const hasFrozenActivity = data.is_frozen && frozenS &&
-                        (s.attempts !== frozenS.attempts || s.passed !== frozenS.passed);
+                    // Check if this task is marked as frozen pending (backend sets this flag)
+                    const isPending = s.is_frozen_pending || false;
                     
                     if (isICPC) {
-                        if (hasFrozenActivity) {
+                        if (isPending) {
                             // Show frozen state with orange color and "?" indicator
                             cellClass = 'table-warning';
-                            const attemptDisplay = frozenS.attempts ?? '';
+                            const attemptDisplay = s.attempts ?? '';
                             cellContent = `<span class="text-dark fw-bold">?${attemptDisplay}</span>`;
                         } else if (s.passed) {
                             cellContent = `<span class="text-success fw-bold">+${s.attempts > 0 ? s.attempts : ''}</span><br><small class="text-muted">${s.penalty}</small>`;
@@ -343,9 +341,9 @@
                             cellContent = `<span class="text-danger">-${s.attempts}</span>`;
                         }
                     } else {
-                        if (hasFrozenActivity) {
+                        if (isPending) {
                             cellClass = 'table-warning';
-                            const attemptDisplay = frozenS.attempts ?? '';
+                            const attemptDisplay = s.attempts ?? '';
                             cellContent = `<span class="text-dark fw-bold">?${attemptDisplay}</span>`;
                         } else {
                             cellContent = s.score;
@@ -428,14 +426,12 @@
             // Обновляем мини-блоки задач
             for (const taskId in me.scores) {
                 const s = me.scores[taskId];
-                const frozenS = me.frozen_scores?.[taskId] ?? null;
-                const hasFrozenActivity = data.is_frozen && frozenS &&
-                    (s.attempts !== frozenS.attempts || s.passed !== frozenS.passed);
+                const isPending = s.is_frozen_pending || false;
                 const el = document.getElementById(`score-block-${taskId}`);
                 if (el) {
                     if (scoringMode === 'icpc') {
-                        if (hasFrozenActivity) {
-                            const attemptDisplay = frozenS.attempts ?? '';
+                        if (isPending) {
+                            const attemptDisplay = s.attempts ?? '';
                             el.innerHTML = `<span class="text-warning">?${attemptDisplay}</span>`;
                         } else if (s.passed) {
                             el.innerHTML = `<span class="text-success">+${s.attempts > 0 ? s.attempts : ''}</span>`;
@@ -444,8 +440,8 @@
                         }
                         else el.innerHTML = `<span class="text-secondary">-</span>`;
                     } else {
-                        if (hasFrozenActivity) {
-                            const attemptDisplay = frozenS.attempts ?? '';
+                        if (isPending) {
+                            const attemptDisplay = s.attempts ?? '';
                             el.innerHTML = `<span class="text-warning">?${attemptDisplay}</span>`;
                         } else {
                             el.innerHTML = s.score;

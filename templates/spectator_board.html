@@ -47,6 +47,20 @@
         animation: flashGreen 2s ease-out;
     }
 
+    @keyframes pulseOrange {
+        0% { 
+            background-color: #f4a733;
+            box-shadow: 0 0 0 0 rgba(244, 167, 51, 0.7);
+        }
+        50% { 
+            background-color: #ffb84d;
+            box-shadow: 0 0 0 4px rgba(244, 167, 51, 0);
+        }
+        100% { 
+            background-color: #f4a733;
+            box-shadow: 0 0 0 0 rgba(244, 167, 51, 0);
+        }
+    }
     @keyframes pulseYellow {
         0% { background-color: rgba(255, 193, 7, 0.1); }
         50% { background-color: rgba(255, 193, 7, 0.4); }
@@ -59,8 +73,9 @@
     }
 
     .frozen-cell {
-        background-color: #f4a733 !important;
+        animation: pulseOrange 2s infinite;
         color: #1a1a1a !important;
+        font-weight: bold;
         border-color: #f4a733 !important;
     }
 
@@ -261,8 +276,6 @@
             // ВНУТРЕННИЙ ЦИКЛ ПО ЗАДАЧАМ
             currentTaskIds.forEach(tid => {
                 const taskData = p.scores[tid]; // Переменная p здесь доступна!
-                // Check if there's a frozen version of scores available (for display during freeze)
-                const frozenTaskData = p.frozen_scores ? p.frozen_scores[tid] : null;
                 let cellClass = '';
                 let cellContent = '.';
                 
@@ -270,16 +283,14 @@
                 // Используем String(tid), так как ключи в JSON объекте всегда строки
                 const isFirstSolver = (data.first_solves && data.first_solves[String(tid)] === p.participant_id);
 
-                // Check if this particular task has pending activity during freeze
-                const hasFrozenActivity = data.is_frozen && frozenTaskData && 
-                    (taskData.attempts !== frozenTaskData.attempts || 
-                     taskData.passed !== frozenTaskData.passed);
+                // Check if this task is marked as frozen pending (backend sets this flag)
+                const isPending = taskData.is_frozen_pending || false;
 
                 if (data.config.scoring === 'icpc') {
-                    if (hasFrozenActivity) {
+                    if (isPending) {
                         // Show frozen state with orange color and "?" indicator
                         cellClass = 'frozen-cell';
-                        const attemptDisplay = frozenTaskData.attempts ?? '';
+                        const attemptDisplay = taskData.attempts ?? '';
                         cellContent = `?${attemptDisplay}`;
                     } else if (taskData.passed) {
                         cellClass = 'bg-success text-white border-success';
@@ -293,9 +304,9 @@
                     }
             } else {
                 // Points
-                if (hasFrozenActivity) {
+                if (isPending) {
                     cellClass = 'frozen-cell';
-                    const attemptDisplay = frozenTaskData.attempts ?? '';
+                    const attemptDisplay = taskData.attempts ?? '';
                     cellContent = `?${attemptDisplay}`;
                 } else if (taskData.score > 0) {
                     cellClass = taskData.score === 100 ? 'bg-success text-white' : 'text-warning';

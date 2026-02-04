@@ -87,14 +87,17 @@ olympiads = {}
 olympiad_lock = Lock() 
 docker_check_semaphore = Semaphore(MAX_CONCURRENT_CHECKS)
 
+def _get_admin_room_name(olympiad_id):
+    """Get the admin-only SocketIO room name."""
+    return f"{olympiad_id}_admin"
 
-
-def _get_olympiad_state(olympiad_id):
+def _get_olympiad_state(olympiad_id, is_admin=False):
     """
     ОПТИМИЗИРОВАННАЯ ВЕРСИЯ: Использует кэш.
     Пересчитывает scoreboard только если is_dirty=True.
     [FIX] Добавлена нормализация ключей scores (str), чтобы избежать ошибки JSON sort.
     [FREEZE] Добавлена поддержка заморозки таблицы в стиле ICPC.
+    [ADMIN] is_admin=True возвращает немаскированные данные (для организаторов).
     """
     with olympiad_lock:
         if olympiad_id not in olympiads:
@@ -137,43 +140,15 @@ def _get_olympiad_state(olympiad_id):
             response['first_solves'] = oly['first_solves']
             response['is_frozen'] = is_frozen
             response['freeze_minutes'] = freeze_minutes
-            # If frozen, return frozen scoreboard with live data for comparison
-            if is_frozen and oly.get('frozen_scoreboard'):
-                # Use frozen scoreboard as base (preserves frozen ranking)
+            # If frozen AND not admin, apply freeze mask for spectator view
+            if is_frozen and not is_admin and oly.get('frozen_scoreboard'):
                 frozen_scoreboard = oly['frozen_scoreboard']
-                # Compute live scoreboard for comparison
                 live_scoreboard = _compute_scoreboard(oly)
-                live_map = {p['participant_id']: p for p in live_scoreboard}
-                
-                # Create display scoreboard based on frozen ranking
-                display_scoreboard = []
-                for frozen_p in frozen_scoreboard:
-                    p_id = frozen_p['participant_id']
-                    live_p = live_map.get(p_id)
-                    if live_p:
-                        # Merge: keep frozen ranking/totals, add live scores for comparison
-                        display_p = {
-                            'participant_id': p_id,
-                            'nickname': frozen_p['nickname'],
-                            'organization': frozen_p.get('organization'),
-                            'scores': live_p['scores'],  # Live scores
-                            'total_score': live_p['total_score'],  # Live total
-                            'total_penalty': live_p['total_penalty'],  # Live penalty
-                            'frozen_scores': frozen_p['scores'],  # Frozen scores for comparison
-                            'frozen_total_score': frozen_p['total_score'],  # Frozen total for display
-                            'frozen_total_penalty': frozen_p['total_penalty'],  # Frozen penalty for display
-                            'solved_count': live_p.get('solved_count', 0)
-                        }
-                    else:
-                        # Participant not in live scoreboard (shouldn't happen normally)
-                        # Copy frozen data and add explicit frozen_* fields for templates
-                        display_p = frozen_p.copy()
-                        display_p['frozen_scores'] = frozen_p['scores']
-                        display_p['frozen_total_score'] = frozen_p['total_score']
-                        display_p['frozen_total_penalty'] = frozen_p['total_penalty']
-                    display_scoreboard.append(display_p)
-                
-                response['scoreboard'] = display_scoreboard
+                # Apply mask: show old scores, new attempts, pending indicators
+                response['scoreboard'] = _apply_freeze_mask(frozen_scoreboard, live_scoreboard)
+            elif is_frozen and is_admin:
+                # Admin sees live data even during freeze
+                response['scoreboard'] = _compute_scoreboard(oly)
             return response
 
         oly_data_copy = {
@@ -203,43 +178,15 @@ def _get_olympiad_state(olympiad_id):
         response['is_frozen'] = is_frozen
         response['freeze_minutes'] = freeze_minutes
         
-        # If frozen, return frozen scoreboard with live data for comparison
-        if is_frozen and oly.get('frozen_scoreboard'):
-            # Use frozen scoreboard as base (preserves frozen ranking)
+        # If frozen AND not admin, apply freeze mask for spectator view
+        if is_frozen and not is_admin and oly.get('frozen_scoreboard'):
             frozen_scoreboard = oly['frozen_scoreboard']
-            # Live scoreboard already computed in state_to_cache
             live_scoreboard = response['scoreboard']
-            live_map = {p['participant_id']: p for p in live_scoreboard}
-            
-            # Create display scoreboard based on frozen ranking
-            display_scoreboard = []
-            for frozen_p in frozen_scoreboard:
-                p_id = frozen_p['participant_id']
-                live_p = live_map.get(p_id)
-                if live_p:
-                    # Merge: keep frozen ranking/totals, add live scores for comparison
-                    display_p = {
-                        'participant_id': p_id,
-                        'nickname': frozen_p['nickname'],
-                        'organization': frozen_p.get('organization'),
-                        'scores': live_p['scores'],  # Live scores
-                        'total_score': live_p['total_score'],  # Live total
-                        'total_penalty': live_p['total_penalty'],  # Live penalty
-                        'frozen_scores': frozen_p['scores'],  # Frozen scores for comparison
-                        'frozen_total_score': frozen_p['total_score'],  # Frozen total for display
-                        'frozen_total_penalty': frozen_p['total_penalty'],  # Frozen penalty for display
-                        'solved_count': live_p.get('solved_count', 0)
-                    }
-                else:
-                    # Participant not in live scoreboard (shouldn't happen normally)
-                    # Copy frozen data and add explicit frozen_* fields for templates
-                    display_p = frozen_p.copy()
-                    display_p['frozen_scores'] = frozen_p['scores']
-                    display_p['frozen_total_score'] = frozen_p['total_score']
-                    display_p['frozen_total_penalty'] = frozen_p['total_penalty']
-                display_scoreboard.append(display_p)
-            
-            response['scoreboard'] = display_scoreboard
+            # Apply mask: show old scores, new attempts, pending indicators
+            response['scoreboard'] = _apply_freeze_mask(frozen_scoreboard, live_scoreboard)
+        elif is_frozen and is_admin:
+            # Admin sees live data even during freeze (already computed)
+            pass
         
         return response
 
@@ -287,6 +234,83 @@ def _compute_scoreboard(oly):
         scoreboard.sort(key=lambda p: -p['total_score'])
     
     return scoreboard
+
+def _apply_freeze_mask(frozen_scoreboard, live_scoreboard):
+    """
+    Apply freeze mask to scoreboard for spectator view.
+    
+    According to ICPC "Blind Freeze" philosophy:
+    - Spectators see OLD scores (from frozen snapshot)
+    - Spectators see NEW attempt counts (from live data)
+    - When live_attempts > frozen_attempts, mark as 'is_frozen_pending' (orange "?")
+    - Preserve frozen ranking order
+    
+    Args:
+        frozen_scoreboard: Snapshot at freeze time
+        live_scoreboard: Current real-time scoreboard
+    
+    Returns:
+        Masked scoreboard for spectator display
+    """
+    live_map = {p['participant_id']: p for p in live_scoreboard}
+    display_scoreboard = []
+    
+    # Iterate through frozen scoreboard to preserve ranking
+    for frozen_p in frozen_scoreboard:
+        p_id = frozen_p['participant_id']
+        live_p = live_map.get(p_id)
+        
+        if not live_p:
+            # Participant not in live scoreboard (shouldn't happen)
+            # Copy frozen data and ensure all tasks have is_frozen_pending flag
+            display_p = frozen_p.copy()
+            display_p['scores'] = {}
+            for task_id, frozen_task in frozen_p['scores'].items():
+                display_p['scores'][task_id] = {
+                    **frozen_task,
+                    'is_frozen_pending': False
+                }
+        else:
+            # Create display participant with masked data
+            display_p = {
+                'participant_id': p_id,
+                'nickname': frozen_p['nickname'],
+                'organization': frozen_p.get('organization'),
+                'total_score': frozen_p['total_score'],  # OLD score (frozen)
+                'total_penalty': frozen_p['total_penalty'],  # OLD penalty (frozen)
+                'solved_count': frozen_p.get('solved_count', 0),
+                'scores': {}
+            }
+            
+            # Process each task
+            for task_id in frozen_p['scores']:
+                frozen_task = frozen_p['scores'][task_id]
+                live_task = live_p['scores'].get(task_id, {})
+                
+                # Create masked task data
+                masked_task = {
+                    'score': frozen_task.get('score', 0),  # OLD score
+                    'passed': frozen_task.get('passed', False),  # OLD passed status
+                    'penalty': frozen_task.get('penalty', 0),  # OLD penalty
+                    'attempts': live_task.get('attempts', 0),  # NEW attempts (visible)
+                    'is_frozen_pending': False
+                }
+                
+                # Check if there's pending activity during freeze
+                frozen_attempts = frozen_task.get('attempts', 0)
+                live_attempts = live_task.get('attempts', 0)
+                frozen_passed = frozen_task.get('passed', False)
+                live_passed = live_task.get('passed', False)
+                
+                # Mark as pending if attempts increased or status changed
+                if live_attempts > frozen_attempts or (live_passed and not frozen_passed):
+                    masked_task['is_frozen_pending'] = True
+                
+                display_p['scores'][task_id] = masked_task
+        
+        display_scoreboard.append(display_p)
+    
+    return display_scoreboard
 
 def _compute_scoreboard_at_time(oly, freeze_time):
     """
@@ -418,16 +442,23 @@ def handle_join_room(data):
 
     join_room(room)
     
+    # Check if user is an admin (organizer)
+    is_admin = session.get(f'is_organizer_for_{room}', False)
+    
     if role == 'spectator':
-        
-        current_state = _get_olympiad_state(room)
+        # Spectators see masked data
+        current_state = _get_olympiad_state(room, is_admin=False)
         if current_state:
             socketio.emit('full_status_update', current_state, to=request.sid)
         return
 
-    if session.get(f'is_organizer_for_{room}'):
+    if is_admin:
         print(f"INFO: Организатор присоединился к комнате: {room}")
-        current_state = _get_olympiad_state(room)
+        # Join admin room for unmasked real-time updates
+        admin_room = _get_admin_room_name(room)
+        join_room(admin_room)
+        # Send unmasked data to admin
+        current_state = _get_olympiad_state(room, is_admin=True)
         if current_state:
             socketio.emit('full_status_update', current_state, to=request.sid)
         return
@@ -494,9 +525,10 @@ def handle_join_room(data):
             else:
                 print(f"WARNING: У {nickname} нет participant_id или не совпадает сессия. (SessID: {session_olympiad_id} != Room: {room})")
 
-    current_state = _get_olympiad_state(room)
+    # Send masked data for participant joining
+    current_state = _get_olympiad_state(room, is_admin=False)
     if current_state:
-        socketio.emit('full_status_update', current_state, to=room)
+        socketio.emit('full_status_update', current_state, to=request.sid)
 
 
 def process_single_submission(item):
@@ -690,9 +722,16 @@ def process_single_submission(item):
             'data': response_data
         }, to=olympiad_id)
 
-        current_state = _get_olympiad_state(olympiad_id)
-        if current_state:
-            socketio.emit('full_status_update', current_state, to=olympiad_id)
+        # Send masked data to spectators and participants
+        spectator_state = _get_olympiad_state(olympiad_id, is_admin=False)
+        if spectator_state:
+            socketio.emit('full_status_update', spectator_state, to=olympiad_id)
+        
+        # Send unmasked data to admins
+        admin_state = _get_olympiad_state(olympiad_id, is_admin=True)
+        if admin_state:
+            admin_room = _get_admin_room_name(olympiad_id)
+            socketio.emit('full_status_update', admin_state, to=admin_room)
 
     except Exception as e:
         print(f"CRITICAL WORKER ERROR in Thread: {e}")
@@ -1360,9 +1399,16 @@ def olympiad_finish_early(olympiad_id):
             oly['is_dirty'] = True
             flash('Вы успешно завершили олимпиаду.', 'success')
     
-    current_state = _get_olympiad_state(olympiad_id)
-    if current_state:
-        socketio.emit('full_status_update', current_state, to=olympiad_id)
+    # Send masked data to spectators and participants
+    spectator_state = _get_olympiad_state(olympiad_id, is_admin=False)
+    if spectator_state:
+        socketio.emit('full_status_update', spectator_state, to=olympiad_id)
+    
+    # Send unmasked data to admins
+    admin_state = _get_olympiad_state(olympiad_id, is_admin=True)
+    if admin_state:
+        admin_room = _get_admin_room_name(olympiad_id)
+        socketio.emit('full_status_update', admin_state, to=admin_room)
 
     
     return redirect(url_for('olympiad_end', olympiad_id=olympiad_id))
@@ -1497,9 +1543,16 @@ def olympiad_disqualify(olympiad_id, participant_id):
         else:
             flash('Участник не найден.', 'danger')
 
-    current_state = _get_olympiad_state(olympiad_id)
-    if current_state:
-        socketio.emit('full_status_update', current_state, to=olympiad_id)
+    # Send masked data to spectators and participants
+    spectator_state = _get_olympiad_state(olympiad_id, is_admin=False)
+    if spectator_state:
+        socketio.emit('full_status_update', spectator_state, to=olympiad_id)
+    
+    # Send unmasked data to admins
+    admin_state = _get_olympiad_state(olympiad_id, is_admin=True)
+    if admin_state:
+        admin_room = _get_admin_room_name(olympiad_id)
+        socketio.emit('full_status_update', admin_state, to=admin_room)
     
         
     return redirect(url_for('olympiad_host', olympiad_id=olympiad_id))

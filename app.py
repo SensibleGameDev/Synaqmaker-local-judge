@@ -262,7 +262,14 @@ def _apply_freeze_mask(frozen_scoreboard, live_scoreboard):
         
         if not live_p:
             # Participant not in live scoreboard (shouldn't happen)
+            # Copy frozen data and ensure all tasks have is_frozen_pending flag
             display_p = frozen_p.copy()
+            display_p['scores'] = {}
+            for task_id, frozen_task in frozen_p['scores'].items():
+                display_p['scores'][task_id] = {
+                    **frozen_task,
+                    'is_frozen_pending': False
+                }
         else:
             # Create display participant with masked data
             display_p = {
@@ -435,8 +442,8 @@ def handle_join_room(data):
 
     join_room(room)
     
-    # Check if user is an organizer (admin)
-    is_organizer = session.get(f'is_organizer_for_{room}', False)
+    # Check if user is an admin (organizer)
+    is_admin = session.get(f'is_organizer_for_{room}', False)
     
     if role == 'spectator':
         # Spectators see masked data
@@ -445,7 +452,7 @@ def handle_join_room(data):
             socketio.emit('full_status_update', current_state, to=request.sid)
         return
 
-    if is_organizer:
+    if is_admin:
         print(f"INFO: Организатор присоединился к комнате: {room}")
         # Join admin room for unmasked real-time updates
         admin_room = _get_admin_room_name(room)

@@ -189,7 +189,11 @@
         let alertClass = 'alert-danger';
         let alertText = 'Ошибка';
 
-        if (data.passed) {
+        // [FREEZE FIX] Handle frozen verdict - participant doesn't see actual result during freeze
+        if (data.verdict === "FROZEN" || data.is_frozen) {
+            alertClass = 'alert-warning';
+            alertText = `<strong><i class="bi bi-snow"></i> Заморожено!</strong> Решение принято и проверено. Результат будет раскрыт после церемонии разморозки.`;
+        } else if (data.passed) {
             alertClass = 'alert-success';
             alertText = `<strong>Accepted!</strong> Решение принято.`;
         } else if (data.verdict === "CE") {
@@ -257,6 +261,7 @@
                     else if (row.verdict === 'Time Limit Exceeded') { badgeClass = 'bg-warning text-dark'; verdictText = 'TLE'; }
                     else if (row.verdict && row.verdict.includes('Compilation')) { badgeClass = 'bg-dark'; verdictText = 'CE'; }
                     else if (row.verdict === 'Runtime Error') { badgeClass = 'bg-danger'; verdictText = 'RE'; }
+                    else if (row.verdict === 'Frozen') { badgeClass = 'bg-warning text-dark'; verdictText = 'Frozen'; }  // [FREEZE FIX] Handle frozen verdict
                     else badgeClass = 'bg-danger'; // WA
                     
                     const tr = document.createElement('tr');

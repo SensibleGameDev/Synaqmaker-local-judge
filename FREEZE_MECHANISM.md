@@ -72,9 +72,9 @@ def _apply_freeze_mask(frozen_scoreboard, live_scoreboard):
 - Receives unmasked data with all current results
 - Sees normal green (passed) / red (failed) cells
 
-### 5. The Reveal Ceremony (`olympiad_reveal.html`)
+### 5. The Reveal Ceremony (`presentation.html`)
 
-After the contest ends, the reveal page:
+After the contest ends, the presentation page:
 1. Loads `frozen_scoreboard` and `final_scoreboard` from database
 2. Compares them to find all pending submissions
 3. Reveals results one by one, starting from the bottom of standings
@@ -186,7 +186,7 @@ Stored in `olympiad_frozen_data` table via `db.save_frozen_scoreboard()`
 - `templates/spectator_board.html` - Spectator UI with masked data
 - `templates/olympiad_run.html` - Participant UI with masked data
 - `templates/olympiad_host.html` - Admin UI with live data
-- `templates/olympiad_reveal.html` - Reveal ceremony animation
+- `templates/presentation.html` - ICPC-style reveal ceremony and presentation
 - `db_manager.py` - Frozen data persistence
 
 ## Security Considerations

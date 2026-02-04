@@ -91,6 +91,32 @@ def _get_admin_room_name(olympiad_id):
     """Get the admin-only SocketIO room name."""
     return f"{olympiad_id}_admin"
 
+def _is_olympiad_frozen(olympiad_id):
+    """
+    Check if an olympiad is currently in freeze mode.
+    Returns True if frozen, False otherwise.
+    Thread-safe: uses olympiad_lock internally.
+    """
+    with olympiad_lock:
+        if olympiad_id not in olympiads:
+            return False
+        
+        oly = olympiads[olympiad_id]
+        freeze_minutes = oly['config'].get('freeze_minutes', 0)
+        
+        if freeze_minutes <= 0:
+            return False
+        
+        if oly['status'] != 'running' or not oly.get('start_time'):
+            return False
+        
+        elapsed = time.time() - oly['start_time']
+        duration_sec = oly['config']['duration_minutes'] * 60
+        remaining_seconds = max(0, duration_sec - elapsed)
+        
+        freeze_threshold_seconds = freeze_minutes * 60
+        return remaining_seconds <= freeze_threshold_seconds
+
 def _get_olympiad_state(olympiad_id, is_admin=False):
     """
     ОПТИМИЗИРОВАННАЯ ВЕРСИЯ: Использует кэш.
@@ -717,10 +743,33 @@ def process_single_submission(item):
             print(f"HISTORY ERROR: {e}")
 
         # === ОТПРАВКА РЕЗУЛЬТАТА ===
-        socketio.emit('personal_result', {
-            'participant_id': participant_id,
-            'data': response_data
-        }, to=olympiad_id)
+        # [FREEZE FIX] During freeze period, mask personal results for participants
+        # According to ICPC "Blind Freeze" philosophy, participants should NOT see 
+        # actual results during freeze - only that their submission was received
+        is_frozen = _is_olympiad_frozen(olympiad_id)
+        
+        if is_frozen:
+            # Send masked result during freeze - participant only knows submission was processed
+            masked_response_data = {
+                'task_id': task_id,
+                'passed_count': '?',  # Hidden during freeze
+                'total_tests': len(test_data_list),
+                'new_score': None,  # Hidden during freeze
+                'passed': None,  # Hidden during freeze
+                'details': [{'test_num': 1, 'verdict': 'Frozen'}],  # Masked verdict
+                'verdict': 'FROZEN',  # Special frozen status
+                'is_frozen': True
+            }
+            socketio.emit('personal_result', {
+                'participant_id': participant_id,
+                'data': masked_response_data
+            }, to=olympiad_id)
+        else:
+            # Normal mode - send actual result
+            socketio.emit('personal_result', {
+                'participant_id': participant_id,
+                'data': response_data
+            }, to=olympiad_id)
 
         # Send masked data to spectators and participants
         spectator_state = _get_olympiad_state(olympiad_id, is_admin=False)
@@ -2118,9 +2167,13 @@ def api_get_history(olympiad_id):
     raw_history = db.get_participant_history(olympiad_id, participant_id)
 
     tasks_order = []
+    freeze_time = None
+    is_frozen = _is_olympiad_frozen(olympiad_id)
+    
     with olympiad_lock:
         if olympiad_id in olympiads:
             tasks_order = olympiads[olympiad_id]['task_ids']
+            freeze_time = olympiads[olympiad_id].get('freeze_time')
     
     history_json = []
     letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -2135,13 +2188,24 @@ def api_get_history(olympiad_id):
 
         t_struct = time.localtime(row[5])
         time_str = time.strftime("%H:%M:%S", t_struct)
+        submission_time = row[5]
+        
+        # [FREEZE FIX] Mask verdicts for submissions made during freeze period
+        # Participants should not see actual results for submissions after freeze started
+        verdict = row[2]
+        tests = f"{row[3]} / {row[4]}"
+        
+        if is_frozen and freeze_time and submission_time >= freeze_time:
+            # This submission was made during freeze - mask the verdict
+            verdict = "Frozen"
+            tests = "? / ?"
         
         history_json.append({
             'letter': letter,
             'time': time_str,
             'language': row[1],
-            'verdict': row[2],
-            'tests': f"{row[3]} / {row[4]}"
+            'verdict': verdict,
+            'tests': tests
         })
         
     return jsonify(history_json)
@@ -2255,37 +2319,9 @@ def olympiad_print_cards(olympiad_id):
 @app.route('/olympiad/reveal/<olympiad_id>')
 @admin_required
 def olympiad_reveal(olympiad_id):
-    """Page for ICPC-style scoreboard reveal animation."""
-    frozen_data = db.get_frozen_data(olympiad_id)
-    
-    if not frozen_data:
-        flash('Нет сохраненных данных заморозки для этой олимпиады.', 'warning')
-        return redirect(url_for('olympiad_end', olympiad_id=olympiad_id))
-    
-    # Get olympiad details
-    db_results = db.get_olympiad_results(olympiad_id)
-    if not db_results:
-        flash('Олимпиада не найдена.', 'danger')
-        return redirect(url_for('admin_archive'))
-    
-    tasks = db_results['tasks']
-    config = db_results['results']
-    
-    # Get first solvers for each task
-    first_solvers = db.get_first_solvers(olympiad_id)
-    
-    # Get winners to determine diploma recipients
-    winners = _determine_winners(frozen_data['final_scoreboard'])
-    
-    return render_template('olympiad_reveal.html',
-                           olympiad_id=olympiad_id,
-                           frozen_scoreboard=frozen_data['frozen_scoreboard'],
-                           final_scoreboard=frozen_data['final_scoreboard'],
-                           tasks=tasks,
-                           config=config,
-                           first_solvers=first_solvers,
-                           winners=winners,
-                           is_revealed=frozen_data['is_revealed'])
+    """Page for ICPC-style scoreboard reveal animation. Redirects to presentation mode."""
+    # Redirect to presentation page which has the unified reveal functionality
+    return redirect(url_for('olympiad_presentation', olympiad_id=olympiad_id))
 
 @app.route('/olympiad/api/frozen_data/<olympiad_id>')
 @admin_required

@@ -1,7 +1,7 @@
 # ICPC-Style Freeze/Unfreeze Mechanism
 
 ## Overview
-This implementation follows the ICPC "Blind Freeze" philosophy where the scoreboard is frozen during the last part of the contest to create suspense. Spectators see limited information while admins see everything in real-time.
+This implementation follows the ICPC "Blind Freeze" philosophy where the scoreboard is frozen during the last part of the contest to create suspense. The public scoreboard shows limited information while participants always see their own results and admins see everything in real-time.
 
 ## How It Works
 
@@ -16,15 +16,20 @@ When the contest reaches the freeze threshold (e.g., last 60 minutes):
 ### 2. The Masking Logic (`_apply_freeze_mask`)
 This is the core of the freeze mechanism:
 
-**What spectators see:**
+**What spectators see on the public scoreboard:**
 - **OLD scores** - The scores/penalties from the frozen snapshot
 - **NEW attempt counts** - The current number of attempts (so they know someone is trying)
 - **Pending indicators** - Orange "?" for tasks where attempts increased during freeze
 
-**What is hidden:**
+**What spectators don't see on the public scoreboard:**
 - Whether new submissions passed or failed
 - New scores earned during freeze
 - Ranking changes due to freeze-period activity
+
+**What participants always see (their own results):**
+- Full feedback for ALL their submissions (pass/fail, verdict, test results)
+- Their submission history with actual verdicts
+- This is NOT affected by freeze - participants need to know if their solution works
 
 **Implementation:**
 ```python
@@ -40,16 +45,18 @@ def _apply_freeze_mask(frozen_scoreboard, live_scoreboard):
 ### 3. Admin/Spectator Separation
 
 **Two SocketIO Rooms:**
-1. **`olympiad_id`** - Public room for spectators and participants (masked data)
-2. **`olympiad_id_admin`** - Private room for organizers (unmasked data)
+1. **`olympiad_id`** - Public room for spectators and participants (scoreboard masked, personal results unmasked)
+2. **`olympiad_id_admin`** - Private room for organizers (all data unmasked)
 
 **How it works:**
 - When organizers join, they join BOTH rooms
-- When submissions are processed, the system emits TWO updates:
-  - Masked scoreboard → Public room
-  - Live scoreboard → Admin room
+- When submissions are processed, the system emits:
+  - Personal result (unmasked) → Participant who submitted
+  - Masked scoreboard → Public room (for spectators)
+  - Live scoreboard → Admin room (for organizers)
 - Admins see green/red cells in real-time
 - Spectators see orange "?" cells for pending submissions
+- Participants always see their own actual submission results
 
 **Code:**
 - `handle_join_room()` - Lines 437-457
@@ -61,16 +68,19 @@ def _apply_freeze_mask(frozen_scoreboard, live_scoreboard):
 - Checks `is_frozen_pending` flag for each task
 - If `true`, displays orange cell with "?" and attempt count
 - CSS animation: `pulseOrange` creates pulsing effect
+- Spectators see the frozen scoreboard state
 
 **Participant View (`olympiad_run.html`):**
-- Same logic as spectator board
-- Shows frozen totals in header
-- Individual task blocks show "?" for pending tasks
+- Participants ALWAYS see their actual submission results (pass/fail, verdict, tests)
+- Personal feedback is never masked during freeze
+- The scoreboard view shows frozen state (like spectators)
+- Individual task history shows real verdicts
 
 **Admin View (`olympiad_host.html`):**
 - Joins admin SocketIO room
 - Receives unmasked data with all current results
 - Sees normal green (passed) / red (failed) cells
+- Sees live scoreboard updates
 
 ### 5. The Reveal Ceremony (`presentation.html`)
 
@@ -119,17 +129,27 @@ After the contest ends, the presentation page:
 - System takes snapshot of current standings
 
 **During Freeze (17:05):**
-- Bob submits solution for problem B → gets Accepted
-- Alice tries problem C → gets Wrong Answer (3 attempts)
+- Bob submits solution for problem B → gets Accepted (Bob sees "Accepted" immediately)
+- Alice tries problem C → gets Wrong Answer (Alice sees "WA on test 3" immediately)
 
-**What Spectators See:**
+**What Spectators See (Scoreboard):**
 ```
 Place | Name  | Solved | Penalty | A | B   | C
 1     | Alice |   2    |  150    | + | +   | ?3   ← Orange, pulsing
 2     | Bob   |   1    |   50    | + | ?3  | -    ← Orange, pulsing
 ```
 
-**What Admins See:**
+**What Bob Sees (His View):**
+- Submission result: "✅ Accepted! Solution accepted."
+- History: Shows "Accepted" verdict for problem B
+- Knows his solution passed!
+
+**What Alice Sees (Her View):**
+- Submission result: "❌ WA on test 3"
+- History: Shows "Wrong Answer" verdict with test results
+- Knows she needs to fix her solution
+
+**What Admins See (Scoreboard):**
 ```
 Place | Name  | Solved | Penalty | A | B  | C
 1     | Bob   |   3    |  250    | + | +  | +   ← Green (new solve)

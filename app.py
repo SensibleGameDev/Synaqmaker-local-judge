@@ -743,33 +743,12 @@ def process_single_submission(item):
             print(f"HISTORY ERROR: {e}")
 
         # === ОТПРАВКА РЕЗУЛЬТАТА ===
-        # [FREEZE FIX] During freeze period, mask personal results for participants
-        # According to ICPC "Blind Freeze" philosophy, participants should NOT see 
-        # actual results during freeze - only that their submission was received
-        is_frozen = _is_olympiad_frozen(olympiad_id)
-        
-        if is_frozen:
-            # Send masked result during freeze - participant only knows submission was processed
-            masked_response_data = {
-                'task_id': task_id,
-                'passed_count': None,  # Hidden during freeze
-                'total_tests': len(test_data_list),
-                'new_score': None,  # Hidden during freeze
-                'passed': None,  # Hidden during freeze
-                'details': [],  # No details during freeze
-                'verdict': 'FROZEN',  # Special frozen status
-                'is_frozen': True
-            }
-            socketio.emit('personal_result', {
-                'participant_id': participant_id,
-                'data': masked_response_data
-            }, to=olympiad_id)
-        else:
-            # Normal mode - send actual result
-            socketio.emit('personal_result', {
-                'participant_id': participant_id,
-                'data': response_data
-            }, to=olympiad_id)
+        # Participants always see their actual submission results, even during freeze.
+        # Only the public scoreboard is frozen, not personal feedback.
+        socketio.emit('personal_result', {
+            'participant_id': participant_id,
+            'data': response_data
+        }, to=olympiad_id)
 
         # Send masked data to spectators and participants
         spectator_state = _get_olympiad_state(olympiad_id, is_admin=False)
@@ -2167,13 +2146,10 @@ def api_get_history(olympiad_id):
     raw_history = db.get_participant_history(olympiad_id, participant_id)
 
     tasks_order = []
-    freeze_time = None
-    is_frozen = _is_olympiad_frozen(olympiad_id)
     
     with olympiad_lock:
         if olympiad_id in olympiads:
             tasks_order = olympiads[olympiad_id]['task_ids']
-            freeze_time = olympiads[olympiad_id].get('freeze_time')
     
     history_json = []
     letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -2190,15 +2166,10 @@ def api_get_history(olympiad_id):
         time_str = time.strftime("%H:%M:%S", t_struct)
         submission_time = row[5]
         
-        # [FREEZE FIX] Mask verdicts for submissions made during freeze period
-        # Participants should not see actual results for submissions after freeze started
+        # Participants always see their actual submission results, even during freeze.
+        # Only the public scoreboard is frozen, not personal feedback.
         verdict = row[2]
         tests = f"{row[3]} / {row[4]}"
-        
-        if is_frozen and freeze_time and submission_time >= freeze_time:
-            # This submission was made during freeze - mask the verdict
-            verdict = "Frozen"
-            tests = "? / ?"
         
         history_json.append({
             'letter': letter,

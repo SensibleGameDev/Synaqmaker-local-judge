@@ -752,11 +752,11 @@ def process_single_submission(item):
             # Send masked result during freeze - participant only knows submission was processed
             masked_response_data = {
                 'task_id': task_id,
-                'passed_count': '?',  # Hidden during freeze
+                'passed_count': None,  # Hidden during freeze
                 'total_tests': len(test_data_list),
                 'new_score': None,  # Hidden during freeze
                 'passed': None,  # Hidden during freeze
-                'details': [{'test_num': 1, 'verdict': 'Frozen'}],  # Masked verdict
+                'details': [],  # No details during freeze
                 'verdict': 'FROZEN',  # Special frozen status
                 'is_frozen': True
             }

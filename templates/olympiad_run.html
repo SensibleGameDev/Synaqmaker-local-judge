@@ -261,7 +261,7 @@
                     else if (row.verdict === 'Time Limit Exceeded') { badgeClass = 'bg-warning text-dark'; verdictText = 'TLE'; }
                     else if (row.verdict && row.verdict.includes('Compilation')) { badgeClass = 'bg-dark'; verdictText = 'CE'; }
                     else if (row.verdict === 'Runtime Error') { badgeClass = 'bg-danger'; verdictText = 'RE'; }
-                    else if (row.verdict === 'Frozen') { badgeClass = 'bg-warning text-dark'; verdictText = '❄️ Frozen'; }  // [FREEZE FIX] Handle frozen verdict
+                    else if (row.verdict === 'Frozen') { badgeClass = 'bg-warning text-dark'; verdictText = 'Frozen'; }  // [FREEZE FIX] Handle frozen verdict
                     else badgeClass = 'bg-danger'; // WA
                     
                     const tr = document.createElement('tr');

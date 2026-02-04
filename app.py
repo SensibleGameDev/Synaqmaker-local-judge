@@ -2139,6 +2139,11 @@ def admin_archive_export(olympiad_id):
 
 @app.route('/olympiad/api/history/<olympiad_id>')
 def api_get_history(olympiad_id):
+    """
+    Get submission history for a participant.
+    Note: No freeze masking is applied here - participants always see their actual results.
+    Only the public scoreboard is affected by freeze, not personal submission feedback.
+    """
     participant_id = session.get('participant_id')
     if not participant_id:
         return jsonify([])

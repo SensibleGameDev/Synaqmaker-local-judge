@@ -518,9 +518,10 @@ def handle_join_room(data):
             else:
                 print(f"WARNING: У {nickname} нет participant_id или не совпадает сессия. (SessID: {session_olympiad_id} != Room: {room})")
 
-    current_state = _get_olympiad_state(room)
+    # Send masked data for participant joining
+    current_state = _get_olympiad_state(room, is_admin=False)
     if current_state:
-        socketio.emit('full_status_update', current_state, to=room)
+        socketio.emit('full_status_update', current_state, to=request.sid)
 
 
 def process_single_submission(item):
